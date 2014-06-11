@@ -41,15 +41,18 @@ public class Program {
 	private static final Logger LOGGER = Logger.getLogger(Program.class);
 	private static final String LOGGER_CONFIG_PATH = "./Logger.xml";
 	private static final String APPLICATION_NAME = "storedatacollector";
-	
-	private static String projectName = "storedatacollector";
-	private static String taskQueueName = "model";
+
+	private static final String PROJECT_NAME = "storedatacollector";
+
+	private static String MODEL_QUEUE_NAME = "model";
+	private static String PREDICT_QUEUE_NAME = "predict";
+
 	private static int leaseSecs = 43200;
 	private static int numTasks = 1;
-	
+
 	private static final File DATA_STORE_DIR = new File(
 			System.getProperty("user.home"), ".store/pull_model_config");
-	
+
 	private static FileDataStoreFactory dataStoreFactory;
 	private static HttpTransport httpTransport;
 	private static boolean isComputeEngine = true;
@@ -60,9 +63,7 @@ public class Program {
 		DOMConfigurator.configure(LOGGER_CONFIG_PATH);
 
 		LOGGER.info("pulling message from the model");
-		run();
-
-		LOGGER.info("run R script");
+		runModelTasks();
 
 		LOGGER.info("marking message as processed");
 
@@ -99,13 +100,13 @@ public class Program {
 		return c;
 	}
 
-	private static void run() throws Exception {
+	private static void runModelTasks() throws Exception {
 		httpTransport = GoogleNetHttpTransport.newTrustedTransport();
 		dataStoreFactory = new FileDataStoreFactory(DATA_STORE_DIR);
 
 		Credential credential = authorize();
 
-		Taskqueue taskQueue = new Taskqueue.Builder(httpTransport,
+		Taskqueue taskQueueApi = new Taskqueue.Builder(httpTransport,
 				JSON_FACTORY, credential)
 				.setApplicationName(APPLICATION_NAME)
 				.setTaskqueueRequestInitializer(
@@ -116,62 +117,75 @@ public class Program {
 							}
 						}).build();
 
-		TaskQueue queue = getQueue(taskQueue);
-		LOGGER.info(queue);
+		TaskQueue modelQueue = getQueue(taskQueueApi, MODEL_QUEUE_NAME);
+		LOGGER.info(modelQueue);
+		
+		TaskQueue predictQueue = getQueue(taskQueueApi, PREDICT_QUEUE_NAME);
+		LOGGER.info(predictQueue);
 
-		Tasks tasks = getLeasedTasks(taskQueue);
+		Tasks tasks = getLeasedTasks(taskQueueApi, MODEL_QUEUE_NAME);
 		if ((tasks.getItems() == null) || (tasks.getItems().size() == 0)) {
 			LOGGER.info("No tasks to lease");
 		} else {
 			for (Task leasedTask : tasks.getItems()) {
-				executeTask(leasedTask);
-				deleteTask(taskQueue, leasedTask);
+				LOGGER.info("run R script");
+				if (executeModelTask(leasedTask)) {
+					LOGGER.info("Deleting successfully complete model task");
+					deleteTask(taskQueueApi, leasedTask, MODEL_QUEUE_NAME);
+					
+					// TODO: insert a perdict task for the process to continue
+				} else {
+					LOGGER.error("Could not complete model task");
+					// TODO: update the lease on the task such that it can be
+					// picked up and tried again
+				}
 			}
 		}
 	}
 
 	public static boolean parseParams(String[] args) {
 		try {
-			projectName = args[0];
-			taskQueueName = args[1];
 			leaseSecs = Integer.parseInt(args[2]);
 			numTasks = Integer.parseInt(args[3]);
-			
+
 			return true;
 		} catch (ArrayIndexOutOfBoundsException ae) {
-			System.out.println("Insufficient Arguments");
+			LOGGER.error("Insufficient Arguments");
 			return false;
 		} catch (NumberFormatException ae) {
-			System.out
-					.println("Please specify lease seconds and Number of tasks tolease, in number format");
+			LOGGER.error("Please specify lease seconds and Number of tasks tolease, in number format");
 		}
 		return false;
 	}
 
-	private static TaskQueue getQueue(Taskqueue taskQueue) throws IOException {
+	private static TaskQueue getQueue(Taskqueue taskQueue, String taskQueueName)
+			throws IOException {
 		Taskqueue.Taskqueues.Get request = taskQueue.taskqueues().get(
-				projectName, taskQueueName);
+				PROJECT_NAME, taskQueueName);
 		request.setGetStats(Boolean.valueOf(true));
 		return (TaskQueue) request.execute();
 	}
 
-	private static Tasks getLeasedTasks(Taskqueue taskQueue) throws IOException {
+	private static Tasks getLeasedTasks(Taskqueue taskQueue,
+			String taskQueueName) throws IOException {
 		Taskqueue.Tasks.Lease leaseRequest = taskQueue.tasks().lease(
-				projectName, taskQueueName, Integer.valueOf(numTasks),
+				PROJECT_NAME, taskQueueName, Integer.valueOf(numTasks),
 				Integer.valueOf(leaseSecs));
 		return (Tasks) leaseRequest.execute();
 	}
 
-	private static void executeTask(Task task) throws IOException {
+	private static boolean executeModelTask(Task task) throws IOException {
 		LOGGER.info("Payload for the task:");
 		LOGGER.info(task.getPayloadBase64());
 
 		LOGGER.info("Running task with parameters");
+
+		return false;
 	}
 
-	private static void deleteTask(Taskqueue taskQueue, Task task)
-			throws IOException {
-		Taskqueue.Tasks.Delete request = taskQueue.tasks().delete(projectName,
+	private static void deleteTask(Taskqueue taskQueue, Task task,
+			String taskQueueName) throws IOException {
+		Taskqueue.Tasks.Delete request = taskQueue.tasks().delete(PROJECT_NAME,
 				taskQueueName, task.getId());
 		request.execute();
 	}
