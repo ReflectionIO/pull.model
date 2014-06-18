@@ -7,12 +7,38 @@
 //
 package io.reflection.pullmodel;
 
+import io.reflection.app.api.exception.DataAccessException;
+import io.reflection.app.collectors.Collector;
+import io.reflection.app.collectors.CollectorFactory;
+import io.reflection.app.datatypes.shared.Category;
+import io.reflection.app.datatypes.shared.Country;
+import io.reflection.app.datatypes.shared.FeedFetch;
+import io.reflection.app.datatypes.shared.FeedFetchStatusType;
+import io.reflection.app.datatypes.shared.FormType;
+import io.reflection.app.datatypes.shared.ModelRun;
+import io.reflection.app.datatypes.shared.Store;
+import io.reflection.app.modellers.Modeller;
+import io.reflection.app.modellers.ModellerFactory;
+import io.reflection.app.repackaged.scphopr.cloudsql.Connection;
+import io.reflection.app.repackaged.scphopr.service.database.DatabaseServiceProvider;
+import io.reflection.app.repackaged.scphopr.service.database.DatabaseType;
+import io.reflection.app.service.category.CategoryServiceProvider;
+import io.reflection.app.service.feedfetch.FeedFetchServiceProvider;
+import io.reflection.app.service.modelrun.ModelRunServiceProvider;
+import io.reflection.app.service.rank.RankServiceProvider;
+import io.reflection.app.shared.util.DataTypeHelper;
+
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.codec.binary.Base64;
@@ -35,6 +61,7 @@ import com.google.api.services.taskqueue.TaskqueueRequestInitializer;
 import com.google.api.services.taskqueue.model.Task;
 import com.google.api.services.taskqueue.model.TaskQueue;
 import com.google.api.services.taskqueue.model.Tasks;
+import com.spacehopperstudios.utility.StringUtils;
 
 /**
  * @author billy1380
@@ -48,7 +75,7 @@ public class Program {
 	private static final String PROJECT_NAME = "storedatacollector";
 
 	private static String MODEL_QUEUE_NAME = "model";
-	private static String PREDICT_QUEUE_NAME = "predict";
+//	private static String PREDICT_QUEUE_NAME = "predict";
 
 	private static final int DEFAULT_LEASE_DURATION = 43200;
 	private static final int TASKS_TO_LEASE = 1;
@@ -62,6 +89,14 @@ public class Program {
 	private static HttpTransport httpTransport;
 
 	private static final JsonFactory JSON_FACTORY = JacksonFactory.getDefaultInstance();
+
+	private static Map<String, String> itemIapLookup = new HashMap<String, String>();
+
+	// private static final String TRUNCATED_OUTPUT_PATH =
+	// "outputtruncated.csv";
+	private static final String ROBUST_OUTPUT_PATH = "outputrobust.csv";
+
+	private static final String FILE_SPARATOR = System.getProperty("file.separator");
 
 	public static void main(String[] args) throws Exception {
 
@@ -120,13 +155,17 @@ public class Program {
 		if ((tasks.getItems() == null) || (tasks.getItems().size() == 0)) {
 			LOGGER.info("No tasks to lease");
 		} else {
+			if (tasks != null && tasks.size() > 0) {
+				loadItemsIaps();
+			}
+
 			for (Task leasedTask : tasks.getItems()) {
 				LOGGER.info("run R script");
 				if (executeModelTask(leasedTask)) {
+					// TODO: insert a perdict task for the process to continue
+
 					LOGGER.info("Deleting successfully complete model task");
 					deleteTask(taskQueueApi, leasedTask, MODEL_QUEUE_NAME);
-
-					// TODO: insert a perdict task for the process to continue
 				} else {
 					LOGGER.error("Could not complete model task");
 					expireTaskLease(taskQueueApi, leasedTask, MODEL_QUEUE_NAME);
@@ -162,7 +201,14 @@ public class Program {
 		return (Tasks) leaseRequest.execute();
 	}
 
-	private static boolean executeModelTask(Task task) throws IOException, URISyntaxException {
+	/**
+	 * @param task
+	 * @return
+	 * @throws IOException
+	 * @throws URISyntaxException
+	 * @throws DataAccessException
+	 */
+	private static boolean executeModelTask(Task task) throws IOException, URISyntaxException, DataAccessException {
 		LOGGER.info("Payload for the task:");
 
 		String parameters = task.getPayloadBase64();
@@ -187,17 +233,165 @@ public class Program {
 			String country = mappedParams.get("country");
 			String type = mappedParams.get("type");
 			String codeParam = mappedParams.get("code");
-			// Long code = codeParam == null ? null : Long.valueOf(codeParam);
+			Long code = codeParam == null ? null : Long.valueOf(codeParam);
+
+			LOGGER.info("Running task with parameters");
 
 			LOGGER.debug(String.format("store: [%s]", store));
 			LOGGER.debug(String.format("country: [%s]", country));
 			LOGGER.debug(String.format("type: [%s]", type));
 			LOGGER.debug(String.format("code: [%s]", codeParam));
 
-			LOGGER.info("Running task with parameters");
+			Date date = RankServiceProvider.provide().getCodeLastRankDate(code);
+
+			try {
+				Country c = new Country();
+				c.a2Code = country;
+
+				Store s = new Store();
+				s.a3Code = store;
+
+				Collector collector = CollectorFactory.getCollectorForStore(store);
+				List<String> listTypes = new ArrayList<String>();
+				listTypes.addAll(collector.getCounterpartTypes(type));
+				listTypes.add(type);
+
+				String freeFilePath = createInputFile(s, c, listTypes, date, "`price`=0", "free");
+				String paidFilePath = createInputFile(s, c, listTypes, date, "`price`<>0", "paid");
+
+				Modeller modeller = ModellerFactory.getModellerForStore(store);
+
+				// runRScriptWithParameters("model.R", freeFilePath,
+				// paidFilePath, TRUNCATED_OUTPUT_PATH, "400", "40", "500000");
+				runRScriptWithParameters("robustModel.R", freeFilePath, paidFilePath, ROBUST_OUTPUT_PATH, "200", "40", "500000");
+
+				persistValues(ROBUST_OUTPUT_PATH, c, s, modeller.getForm(type), code);
+
+				alterFeedFetchStatus(c, s, listTypes, code);
+
+				// deleteFile(TRUNCATED_OUTPUT_PATH);
+				deleteFile(ROBUST_OUTPUT_PATH);
+
+				deleteFile(freeFilePath);
+				deleteFile(paidFilePath);
+			} catch (Exception e) {
+				LOGGER.error("Error running script", e);
+				LOGGER.fatal(String.format("Error occured calculating values with parameters store [%s], country [%s], type [%s], [%s]", store, country, type,
+						date == null ? "null" : Long.toString(date.getTime())), e);
+			}
 		}
 
 		return false;
+	}
+
+	private static String createInputFile(Store store, Country country, List<String> listTypes, Date date, String priceQuery, String fileRef)
+			throws IOException, DataAccessException {
+		String inputFilePath = fileRef + ".csv";
+
+		FileWriter writer = null;
+
+		String typesQueryPart = null;
+		if (listTypes.size() == 1) {
+			typesQueryPart = String.format("`type`='%s'", listTypes.get(0));
+		} else {
+			typesQueryPart = "`type` IN ('" + StringUtils.join(listTypes, "','") + "')";
+		}
+
+		Category category = CategoryServiceProvider.provide().getAllCategory(store);
+
+		String query = String
+				.format("SELECT `r`.`itemid`, `r`.`position`,`r`.`grossingposition`, `r`.`price` FROM `rank` AS `r` WHERE `r`.`country`='%s' AND `r`.`categoryid`=%d AND `r`.`source`='%s' AND %s AND `r`.%s AND `date`<FROM_UNIXTIME(%d)"
+						+ " ORDER BY `date` DESC", country.a2Code, category.id.longValue(), store.a3Code, priceQuery, typesQueryPart, date.getTime() / 1000);
+
+		Connection rankConnection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeRank.toString());
+
+		try {
+			rankConnection.connect();
+			rankConnection.executeQuery(query.toString());
+
+			writer = new FileWriter(inputFilePath);
+
+			writer.append("#item id,top position,grossing position,price,usesiap");
+
+			String itemId;
+
+			while (rankConnection.fetchNextRow()) {
+				writer.append("\n");
+
+				writer.append("\"");
+				writer.append(itemId = rankConnection.getCurrentRowString("itemid"));
+				writer.append("\",");
+
+				Integer topPosition = rankConnection.getCurrentRowInteger("position");
+				writer.append(topPosition == null || topPosition.intValue() == 0 ? "NA" : topPosition.toString());
+				writer.append(",");
+
+				Integer grossingPosition = rankConnection.getCurrentRowInteger("grossingposition");
+				writer.append(grossingPosition == null || grossingPosition.intValue() == 0 ? "NA" : grossingPosition.toString());
+				writer.append(",");
+
+				double price = rankConnection.getCurrentRowInteger("price").intValue() / 100.0;
+				writer.append(Double.toString(price));
+				writer.append(",");
+
+				String usesIap = lookupItemIap(itemId);
+				writer.append(usesIap);
+			}
+
+		} finally {
+			if (rankConnection != null) {
+				rankConnection.disconnect();
+			}
+
+			if (writer != null) {
+				writer.close();
+			}
+		}
+
+		return inputFilePath;
+	}
+
+	private static void runRScriptWithParameters(String name, String... parmeters) throws IOException, InterruptedException {
+		LOGGER.debug("Entering runRScript");
+
+		StringBuffer command = new StringBuffer();
+		command.append("Rscript .");
+		command.append(FILE_SPARATOR);
+		command.append("R");
+		command.append(FILE_SPARATOR);
+		command.append(name);
+
+		for (String parameter : parmeters) {
+			command.append(" ");
+			command.append(parameter);
+		}
+
+		LOGGER.debug(String.format("Attempting to run command [%s]", command.toString()));
+
+		Process p = Runtime.getRuntime().exec(command.toString());
+
+		String errLine = null, outLine = null;
+
+		BufferedReader err = new BufferedReader(new InputStreamReader(p.getErrorStream()));
+		BufferedReader out = new BufferedReader(new InputStreamReader(p.getInputStream()));
+
+		while ((errLine = err.readLine()) != null) {
+			LOGGER.error(errLine);
+		}
+
+		while ((outLine = out.readLine()) != null) {
+			LOGGER.info(outLine);
+		}
+
+		int exitVal = p.waitFor();
+
+		if (exitVal != 0) {
+			LOGGER.error("Exited with error code " + exitVal);
+		} else {
+			LOGGER.info("Exited with error code " + exitVal);
+		}
+
+		LOGGER.debug("Exiting runRScript");
 	}
 
 	private static void deleteTask(Taskqueue taskQueue, Task task, String taskQueueName) throws IOException {
@@ -209,4 +403,124 @@ public class Program {
 		Taskqueue.Tasks.Patch request = taskQueue.tasks().patch(PROJECT_NAME, taskQueueName, task.getPayloadBase64(), Integer.valueOf(0), task);
 		request.execute();
 	}
+
+	private static void loadItemsIaps() throws DataAccessException {
+
+		String getItemPropertiesQuery = "SELECT DISTINCT `internalid`, `properties` FROM `item` WHERE `properties` <> 'null' AND NOT `properties` IS NULL AND `deleted`='n' ORDER BY `id` DESC";
+
+		Connection itemConnection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeItem.toString());
+
+		try {
+			itemConnection.connect();
+			itemConnection.executeQuery(getItemPropertiesQuery);
+
+			String jsonProperties, itemId;
+
+			while (itemConnection.fetchNextRow()) {
+				itemId = itemConnection.getCurrentRowString("internalid");
+				jsonProperties = itemConnection.getCurrentRowString("properties");
+
+				itemIapLookup.put(itemId, DataTypeHelper.jsonPropertiesIapState(jsonProperties, "1", "0", "NA"));
+			}
+		} finally {
+			if (itemConnection != null) {
+				itemConnection.disconnect();
+			}
+		}
+	}
+
+	private static String lookupItemIap(String itemId) {
+		String usesIap = itemIapLookup.get(itemId);
+
+		// if we have not looked it up
+		if (usesIap == null) {
+			LOGGER.trace("miss - " + itemId);
+
+			itemIapLookup.put(itemId, usesIap = "NA");
+		} else {
+			LOGGER.trace("hit - " + itemId);
+		}
+
+		LOGGER.trace(usesIap);
+
+		return usesIap;
+	}
+
+	public static void deleteFile(String fileFullPath) {
+		(new File(fileFullPath)).delete();
+	}
+
+	/**
+	 * 
+	 * @param country
+	 * @param store
+	 * @param listTypes
+	 * @param code
+	 * @throws DataAccessException
+	 */
+	private static void alterFeedFetchStatus(Country country, Store store, List<String> listTypes, Long code) throws DataAccessException {
+		List<FeedFetch> feeds = FeedFetchServiceProvider.provide().getGatherCodeFeedFetches(country, store, listTypes, code);
+
+		for (FeedFetch feedFetch : feeds) {
+			feedFetch.status = FeedFetchStatusType.FeedFetchStatusTypeModelled;
+
+			FeedFetchServiceProvider.provide().updateFeedFetch(feedFetch);
+		}
+	}
+
+	/**
+	 * @param code
+	 * @param listTypes
+	 * @param country
+	 * @param store
+	 * @throws DataAccessException
+	 * 
+	 */
+	private static void persistValues(String resultsFileName, Country country, Store store, FormType form, Long code) throws DataAccessException {
+
+		// TODO: add reader and parse output file
+		
+		
+		ModelRun run = ModelRunServiceProvider.provide().getGatherCodeModelRun(country, store, form, code);
+
+		boolean isUpdate = false;
+
+		if (run == null) {
+			run = new ModelRun();
+		} else {
+			isUpdate = true;
+		}
+
+		if (!isUpdate) {
+			run.country = country.a2Code;
+			run.store = store.a3Code;
+			run.code = code;
+			run.form = form;
+		}
+
+		// run.grossingA = Double.valueOf(((Vector)
+		// mEngine.get("ag")).asReal());
+		// run.paidA = Double.valueOf(((Vector) mEngine.get("ap")).asReal());
+		// run.bRatio = Double.valueOf(((Vector)
+		// mEngine.get("b.ratio")).asReal());
+		// run.totalDownloads = Double.valueOf(((Vector)
+		// mEngine.get("Dt")).asReal());
+		// run.paidB = Double.valueOf(((Vector) mEngine.get("bp")).asReal());
+		// run.grossingB = Double.valueOf(((Vector)
+		// mEngine.get("bg")).asReal());
+		// run.paidAIap = Double.valueOf(((Vector)
+		// mEngine.get("iap.ap")).asReal());
+		// run.grossingAIap = Double.valueOf(((Vector)
+		// mEngine.get("iap.ag")).asReal());
+		// run.freeA = Double.valueOf(((Vector) mEngine.get("af")).asReal());
+		// run.theta = Double.valueOf(((Vector) mEngine.get("th")).asReal());
+		// run.freeB = Double.valueOf(((Vector) mEngine.get("bf")).asReal());
+
+		if (isUpdate) {
+			ModelRunServiceProvider.provide().updateModelRun(run);
+		} else {
+			ModelRunServiceProvider.provide().addModelRun(run);
+		}
+	}
+
 }
