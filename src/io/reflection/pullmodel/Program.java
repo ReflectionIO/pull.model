@@ -30,6 +30,7 @@ import io.reflection.app.shared.util.DataTypeHelper;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -75,7 +76,7 @@ public class Program {
 	private static final String PROJECT_NAME = "storedatacollector";
 
 	private static String MODEL_QUEUE_NAME = "model";
-//	private static String PREDICT_QUEUE_NAME = "predict";
+	// private static String PREDICT_QUEUE_NAME = "predict";
 
 	private static final int DEFAULT_LEASE_DURATION = 43200;
 	private static final int TASKS_TO_LEASE = 1;
@@ -97,6 +98,21 @@ public class Program {
 	private static final String ROBUST_OUTPUT_PATH = "outputrobust.csv";
 
 	private static final String FILE_SPARATOR = System.getProperty("file.separator");
+
+//	private static final String CUT_POINT_OUTPUT = "cut.point";
+//	private static final String NUMBER_OF_APPS_OUTPUT = "Napps";
+	
+	private static final String AG_OUTPUT = "ag";
+	private static final String AP_OUTPUT = "ap";
+	private static final String B_RATIO_OUTPUT = "b.ratio";
+	private static final String DT_OUTPUT = "Dt.in";
+	private static final String BP_OUTPUT = "bp";
+	private static final String BG_OUTPUT = "bg";
+	private static final String IAP_AP_OUTPUT = "iap.ap";
+	private static final String IAP_AG_OUTPUT = "iap.ag";
+	private static final String AF_OUTPUT = "af";
+	private static final String TH_OUTPUT = "th";
+	private static final String BF_OUTPUT = "bf";
 
 	public static void main(String[] args) throws Exception {
 
@@ -474,13 +490,13 @@ public class Program {
 	 * @param country
 	 * @param store
 	 * @throws DataAccessException
+	 * @throws IOException
 	 * 
 	 */
-	private static void persistValues(String resultsFileName, Country country, Store store, FormType form, Long code) throws DataAccessException {
+	private static void persistValues(String resultsFileName, Country country, Store store, FormType form, Long code) throws DataAccessException, IOException {
 
-		// TODO: add reader and parse output file
-		
-		
+		Map<String, String> results = parseOutputFile(resultsFileName);
+
 		ModelRun run = ModelRunServiceProvider.provide().getGatherCodeModelRun(country, store, form, code);
 
 		boolean isUpdate = false;
@@ -498,29 +514,59 @@ public class Program {
 			run.form = form;
 		}
 
-		// run.grossingA = Double.valueOf(((Vector)
-		// mEngine.get("ag")).asReal());
-		// run.paidA = Double.valueOf(((Vector) mEngine.get("ap")).asReal());
-		// run.bRatio = Double.valueOf(((Vector)
-		// mEngine.get("b.ratio")).asReal());
-		// run.totalDownloads = Double.valueOf(((Vector)
-		// mEngine.get("Dt")).asReal());
-		// run.paidB = Double.valueOf(((Vector) mEngine.get("bp")).asReal());
-		// run.grossingB = Double.valueOf(((Vector)
-		// mEngine.get("bg")).asReal());
-		// run.paidAIap = Double.valueOf(((Vector)
-		// mEngine.get("iap.ap")).asReal());
-		// run.grossingAIap = Double.valueOf(((Vector)
-		// mEngine.get("iap.ag")).asReal());
-		// run.freeA = Double.valueOf(((Vector) mEngine.get("af")).asReal());
-		// run.theta = Double.valueOf(((Vector) mEngine.get("th")).asReal());
-		// run.freeB = Double.valueOf(((Vector) mEngine.get("bf")).asReal());
+		run.grossingA = Double.valueOf(results.get(AG_OUTPUT));
+		run.paidA = Double.valueOf(results.get(AP_OUTPUT));
+		run.bRatio = Double.valueOf(results.get(B_RATIO_OUTPUT));
+		run.totalDownloads = Double.valueOf(results.get(DT_OUTPUT));
+		run.paidB = Double.valueOf(results.get(BP_OUTPUT));
+		run.grossingB = Double.valueOf(results.get(BG_OUTPUT));
+		run.paidAIap = Double.valueOf(results.get(IAP_AP_OUTPUT));
+		run.grossingAIap = Double.valueOf(results.get(IAP_AG_OUTPUT));
+		run.freeA = Double.valueOf(results.get(AF_OUTPUT));
+		run.theta = Double.valueOf(results.get(TH_OUTPUT));
+		run.freeB = Double.valueOf(results.get(BF_OUTPUT));
 
 		if (isUpdate) {
 			ModelRunServiceProvider.provide().updateModelRun(run);
 		} else {
 			ModelRunServiceProvider.provide().addModelRun(run);
 		}
+	}
+
+	private static Map<String, String> parseOutputFile(String fileFullPath) throws IOException {
+		BufferedReader reader = null;
+		String line;
+		String[] splitLine;
+		Map<String, String> parsedVariables = new HashMap<String, String>();
+		String parameterName;
+
+		try {
+			reader = new BufferedReader(new FileReader(fileFullPath));
+			while ((line = reader.readLine()) != null) {
+
+				splitLine = line.split(",");
+
+				if (splitLine != null && splitLine.length == 2) {
+					if ((parameterName = splitLine[0].replace("\"", "")).length() != 0) {
+						parsedVariables.put(parameterName, splitLine[1]);
+					}
+				}
+			}
+
+		} finally {
+			if (reader != null) {
+				reader.close();
+			}
+		}
+
+		if (LOGGER.isDebugEnabled()) {
+			LOGGER.debug(fileFullPath + " parameters");
+			for (String key : parsedVariables.keySet()) {
+				LOGGER.debug(key + "=" + parsedVariables.get(key));
+			}
+		}
+
+		return parsedVariables;
 	}
 
 }
