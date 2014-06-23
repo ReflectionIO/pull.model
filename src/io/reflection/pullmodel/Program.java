@@ -76,7 +76,7 @@ public class Program {
 	private static final String PROJECT_NAME = "storedatacollector";
 
 	private static String MODEL_QUEUE_NAME = "model";
-	// private static String PREDICT_QUEUE_NAME = "predict";
+	private static String PREDICT_QUEUE_NAME = "predict";
 
 	private static final int DEFAULT_LEASE_DURATION = 43200;
 	private static final int TASKS_TO_LEASE = 1;
@@ -99,9 +99,9 @@ public class Program {
 
 	private static final String FILE_SPARATOR = System.getProperty("file.separator");
 
-//	private static final String CUT_POINT_OUTPUT = "cut.point";
-//	private static final String NUMBER_OF_APPS_OUTPUT = "Napps";
-	
+	// private static final String CUT_POINT_OUTPUT = "cut.point";
+	// private static final String NUMBER_OF_APPS_OUTPUT = "Napps";
+
 	private static final String AG_OUTPUT = "ag";
 	private static final String AP_OUTPUT = "ap";
 	private static final String B_RATIO_OUTPUT = "b.ratio";
@@ -164,8 +164,8 @@ public class Program {
 		TaskQueue modelQueue = getQueue(taskQueueApi, MODEL_QUEUE_NAME);
 		LOGGER.info(modelQueue);
 
-		// TaskQueue predictQueue = getQueue(taskQueueApi, PREDICT_QUEUE_NAME);
-		// LOGGER.info(predictQueue);
+		TaskQueue predictQueue = getQueue(taskQueueApi, PREDICT_QUEUE_NAME);
+		LOGGER.info(predictQueue);
 
 		Tasks tasks = getLeasedTasks(taskQueueApi, MODEL_QUEUE_NAME);
 		if ((tasks.getItems() == null) || (tasks.getItems().size() == 0)) {
@@ -175,10 +175,32 @@ public class Program {
 				loadItemsIaps();
 			}
 
+			Task predictTask;
+			StringBuffer sb = new StringBuffer();
+
 			for (Task leasedTask : tasks.getItems()) {
 				LOGGER.info("run R script");
-				if (executeModelTask(leasedTask)) {
-					// TODO: insert a perdict task for the process to continue
+				Map<String, String> mappedParams = new HashMap<String, String>();
+
+				if (executeModelTask(leasedTask, mappedParams)) {
+					sb.setLength(0);
+
+					predictTask = new Task();
+
+					sb.append("/");
+					sb.append(PREDICT_QUEUE_NAME);
+					sb.append("?country=");
+					sb.append(mappedParams.get("country"));
+					sb.append("&store=");
+					sb.append(mappedParams.get("store"));
+					sb.append("&type=");
+					sb.append(mappedParams.get("type"));
+					sb.append("&code=");
+					sb.append(mappedParams.get("code"));
+
+					predictTask.setPayloadBase64(new String(Base64.encodeBase64(sb.toString().getBytes())));
+
+					insertTask(taskQueueApi, predictTask, PREDICT_QUEUE_NAME);
 
 					LOGGER.info("Deleting successfully complete model task");
 					deleteTask(taskQueueApi, leasedTask, MODEL_QUEUE_NAME);
@@ -224,13 +246,15 @@ public class Program {
 	 * @throws URISyntaxException
 	 * @throws DataAccessException
 	 */
-	private static boolean executeModelTask(Task task) throws IOException, URISyntaxException, DataAccessException {
+	private static boolean executeModelTask(Task task, Map<String, String> mappedParams) throws IOException, URISyntaxException, DataAccessException {
 		LOGGER.info("Payload for the task:");
 
 		String parameters = task.getPayloadBase64();
 		LOGGER.info(parameters);
 
-		Map<String, String> mappedParams = new HashMap<String, String>();
+		if (mappedParams == null) {
+			mappedParams = new HashMap<String, String>();
+		}
 
 		if (parameters != null) {
 			String decodedParameters = new String(Base64.decodeBase64(parameters.getBytes()));
@@ -408,6 +432,11 @@ public class Program {
 		}
 
 		LOGGER.debug("Exiting runRScript");
+	}
+
+	private static void insertTask(Taskqueue taskQueue, Task task, String taskQueueName) throws IOException {
+		Taskqueue.Tasks.Insert request = taskQueue.tasks().insert(PROJECT_NAME, taskQueueName, task);
+		request.execute();
 	}
 
 	private static void deleteTask(Taskqueue taskQueue, Task task, String taskQueueName) throws IOException {

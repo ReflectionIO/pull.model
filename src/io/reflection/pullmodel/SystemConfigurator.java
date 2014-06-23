@@ -9,6 +9,7 @@ package io.reflection.pullmodel;
 
 import org.apache.log4j.xml.DOMConfigurator;
 
+import io.reflection.app.repackaged.scphopr.cloudsql.Connection;
 import io.reflection.app.repackaged.scphopr.service.database.IDatabaseService;
 
 /**
@@ -18,7 +19,7 @@ import io.reflection.app.repackaged.scphopr.service.database.IDatabaseService;
 public class SystemConfigurator {
 
 	private static SystemConfigurator one;
-	
+
 	private static final String LOGGER_CONFIG_PATH = "./Logger.xml";
 
 	/**
@@ -37,7 +38,9 @@ public class SystemConfigurator {
 		System.setProperty(IDatabaseService.DATABASE_CATALOGURE_KEY, "rio");
 		System.setProperty(IDatabaseService.DATABASE_USERNAME_KEY, "rio_app_user");
 		System.setProperty(IDatabaseService.DATABASE_PASSWORD_KEY, "sooth28@duns");
-		
+
+		System.setProperty(Connection.CONNECTION_NATIVE_KEY, "true");
+
 		DOMConfigurator.configure(LOGGER_CONFIG_PATH);
 	}
 
