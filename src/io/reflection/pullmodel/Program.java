@@ -164,8 +164,8 @@ public class Program {
 		TaskQueue modelQueue = getQueue(taskQueueApi, MODEL_QUEUE_NAME);
 		LOGGER.info(modelQueue);
 
-		TaskQueue predictQueue = getQueue(taskQueueApi, PREDICT_QUEUE_NAME);
-		LOGGER.info(predictQueue);
+		// TaskQueue predictQueue = getQueue(taskQueueApi, PREDICT_QUEUE_NAME);
+		// LOGGER.info(predictQueue);
 
 		Tasks tasks = getLeasedTasks(taskQueueApi, MODEL_QUEUE_NAME);
 		if ((tasks.getItems() == null) || (tasks.getItems().size() == 0)) {
@@ -249,6 +249,8 @@ public class Program {
 	private static boolean executeModelTask(Task task, Map<String, String> mappedParams) throws IOException, URISyntaxException, DataAccessException {
 		LOGGER.info("Payload for the task:");
 
+		boolean success = false;
+
 		String parameters = task.getPayloadBase64();
 		LOGGER.info(parameters);
 
@@ -314,6 +316,8 @@ public class Program {
 
 				deleteFile(freeFilePath);
 				deleteFile(paidFilePath);
+
+				success = true;
 			} catch (Exception e) {
 				LOGGER.error("Error running script", e);
 				LOGGER.fatal(String.format("Error occured calculating values with parameters store [%s], country [%s], type [%s], [%s]", store, country, type,
@@ -321,7 +325,7 @@ public class Program {
 			}
 		}
 
-		return false;
+		return success;
 	}
 
 	private static String createInputFile(Store store, Country country, List<String> listTypes, Date date, String priceQuery, String fileRef)
