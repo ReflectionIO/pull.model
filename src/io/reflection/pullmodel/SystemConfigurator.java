@@ -7,10 +7,10 @@
 //
 package io.reflection.pullmodel;
 
-import org.apache.log4j.xml.DOMConfigurator;
-
 import io.reflection.app.repackaged.scphopr.cloudsql.Connection;
 import io.reflection.app.repackaged.scphopr.service.database.IDatabaseService;
+
+import org.apache.log4j.xml.DOMConfigurator;
 
 /**
  * @author William Shakour (billy1380)
@@ -20,6 +20,14 @@ public class SystemConfigurator {
 
 	private static SystemConfigurator one;
 
+	private static final String ADMIN_SERVICE_USERNAME_KEY = "service.admin.username";
+	private static final String ADMIN_SERVICE_PASSWORD_KEY = "service.admin.password";
+	
+	private static final String CORE_SERVICE_URL_KEY = "core.service.url";
+	private static final String ADMIN_SERVICE_URL_KEY = "admin.service.url";
+	
+	private static final String CLIENT_API_TOKEN_KEY = "client.api.token";
+	
 	private static final String LOGGER_CONFIG_PATH = "./Logger.xml";
 
 	/**
@@ -38,6 +46,14 @@ public class SystemConfigurator {
 		System.setProperty(IDatabaseService.DATABASE_CATALOGURE_KEY, "rio");
 		System.setProperty(IDatabaseService.DATABASE_USERNAME_KEY, "rio_app_user");
 		System.setProperty(IDatabaseService.DATABASE_PASSWORD_KEY, "sooth28@duns");
+		
+		System.setProperty(CORE_SERVICE_URL_KEY, "http://www.reflection.io/api/core");
+		System.setProperty(ADMIN_SERVICE_URL_KEY, "http://www.reflection.io/api/core");
+		
+		System.setProperty(CLIENT_API_TOKEN_KEY, "931ecd7a-fe45-11e3-8ba6-7054d251af02");
+		
+		System.setProperty(ADMIN_SERVICE_USERNAME_KEY, "hello@reflection.io");
+		System.setProperty(ADMIN_SERVICE_PASSWORD_KEY, "clattered83-eurobond");
 
 		System.setProperty(Connection.CONNECTION_NATIVE_KEY, "true");
 

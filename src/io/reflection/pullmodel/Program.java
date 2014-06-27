@@ -161,6 +161,8 @@ public class Program {
 					}
 				}).build();
 
+//		dummyInsert(taskQueueApi);
+
 		TaskQueue modelQueue = getQueue(taskQueueApi, MODEL_QUEUE_NAME);
 		LOGGER.info(modelQueue);
 
@@ -211,6 +213,44 @@ public class Program {
 			}
 		}
 	}
+
+//	/**
+//	 * @param taskQueueApi
+//	 * @throws IOException
+//	 * 
+//	 */
+//	private static void dummyInsert(Taskqueue taskQueueApi) throws IOException {
+//
+//		StringBuffer sb = new StringBuffer();
+//		sb.setLength(0);
+//
+//		Map<String, String> mappedParams = new HashMap<String, String>();
+//		mappedParams.put("country", "us");
+//		mappedParams.put("store", "ios");
+//		mappedParams.put("type", "topfreeapplications");
+//		mappedParams.put("code", "892");
+//
+//		Task predictTask = new Task();
+//
+//		sb.append("/");
+//		sb.append(PREDICT_QUEUE_NAME);
+////		sb.append("?country=");
+////		sb.append(mappedParams.get("country"));
+////		sb.append("&store=");
+////		sb.append(mappedParams.get("store"));
+////		sb.append("&type=");
+////		sb.append(mappedParams.get("type"));
+////		sb.append("&code=");
+////		sb.append(mappedParams.get("code"));
+//
+//		predictTask.setQueueName(PREDICT_QUEUE_NAME);
+//		predictTask.setPayloadBase64(new String(Base64.encodeBase64(sb.toString().getBytes())));
+//
+//		insertTask(taskQueueApi, predictTask, PREDICT_QUEUE_NAME);
+//
+//		throw new RuntimeException("Stop");
+//
+//	}
 
 	public static boolean parseParams(String[] args) {
 		try {
