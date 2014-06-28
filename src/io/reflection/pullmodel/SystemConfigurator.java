@@ -20,14 +20,14 @@ public class SystemConfigurator {
 
 	private static SystemConfigurator one;
 
-	private static final String ADMIN_SERVICE_USERNAME_KEY = "service.admin.username";
-	private static final String ADMIN_SERVICE_PASSWORD_KEY = "service.admin.password";
-	
-	private static final String CORE_SERVICE_URL_KEY = "core.service.url";
-	private static final String ADMIN_SERVICE_URL_KEY = "admin.service.url";
-	
-	private static final String CLIENT_API_TOKEN_KEY = "client.api.token";
-	
+	public static final String ADMIN_SERVICE_USERNAME_KEY = "service.admin.username";
+	public static final String ADMIN_SERVICE_PASSWORD_KEY = "service.admin.password";
+
+	public static final String CORE_SERVICE_URL_KEY = "core.service.url";
+	public static final String ADMIN_SERVICE_URL_KEY = "admin.service.url";
+
+	public static final String CLIENT_API_TOKEN_KEY = "client.api.token";
+
 	private static final String LOGGER_CONFIG_PATH = "./Logger.xml";
 
 	/**
@@ -42,22 +42,22 @@ public class SystemConfigurator {
 	}
 
 	public void configure() {
+		DOMConfigurator.configure(LOGGER_CONFIG_PATH);
+
 		System.setProperty(IDatabaseService.DATABASE_SERVER_KEY, "173.194.104.108");
 		System.setProperty(IDatabaseService.DATABASE_CATALOGURE_KEY, "rio");
 		System.setProperty(IDatabaseService.DATABASE_USERNAME_KEY, "rio_app_user");
 		System.setProperty(IDatabaseService.DATABASE_PASSWORD_KEY, "sooth28@duns");
-		
+
 		System.setProperty(CORE_SERVICE_URL_KEY, "http://www.reflection.io/api/core");
-		System.setProperty(ADMIN_SERVICE_URL_KEY, "http://www.reflection.io/api/core");
-		
+		System.setProperty(ADMIN_SERVICE_URL_KEY, "http://www.reflection.io/api/admin");
+
 		System.setProperty(CLIENT_API_TOKEN_KEY, "931ecd7a-fe45-11e3-8ba6-7054d251af02");
-		
+
 		System.setProperty(ADMIN_SERVICE_USERNAME_KEY, "hello@reflection.io");
 		System.setProperty(ADMIN_SERVICE_PASSWORD_KEY, "clattered83-eurobond");
 
 		System.setProperty(Connection.CONNECTION_NATIVE_KEY, "true");
-
-		DOMConfigurator.configure(LOGGER_CONFIG_PATH);
 	}
 
 }

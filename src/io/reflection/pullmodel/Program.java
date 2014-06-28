@@ -7,7 +7,13 @@
 //
 package io.reflection.pullmodel;
 
+import io.reflection.app.api.admin.shared.call.TriggerPredictRequest;
+import io.reflection.app.api.admin.shared.call.TriggerPredictResponse;
+import io.reflection.app.api.core.shared.call.LoginRequest;
+import io.reflection.app.api.core.shared.call.LoginResponse;
 import io.reflection.app.api.exception.DataAccessException;
+import io.reflection.app.api.shared.ApiError;
+import io.reflection.app.api.shared.datatypes.Session;
 import io.reflection.app.collectors.Collector;
 import io.reflection.app.collectors.CollectorFactory;
 import io.reflection.app.datatypes.shared.Category;
@@ -27,6 +33,9 @@ import io.reflection.app.service.feedfetch.FeedFetchServiceProvider;
 import io.reflection.app.service.modelrun.ModelRunServiceProvider;
 import io.reflection.app.service.rank.RankServiceProvider;
 import io.reflection.app.shared.util.DataTypeHelper;
+import io.reflection.pullmodel.json.service.client.AdminService;
+import io.reflection.pullmodel.json.service.client.CoreService;
+import io.reflection.pullmodel.json.service.client.JsonService;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -41,6 +50,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 
 import org.apache.commons.codec.binary.Base64;
 import org.apache.log4j.Logger;
@@ -63,6 +73,7 @@ import com.google.api.services.taskqueue.model.Task;
 import com.google.api.services.taskqueue.model.TaskQueue;
 import com.google.api.services.taskqueue.model.Tasks;
 import com.spacehopperstudios.utility.StringUtils;
+import com.willshex.gson.json.service.shared.StatusType;
 
 /**
  * @author billy1380
@@ -76,7 +87,7 @@ public class Program {
 	private static final String PROJECT_NAME = "storedatacollector";
 
 	private static String MODEL_QUEUE_NAME = "model";
-	private static String PREDICT_QUEUE_NAME = "predict";
+	// private static String PREDICT_QUEUE_NAME = "predict";
 
 	private static final int DEFAULT_LEASE_DURATION = 43200;
 	private static final int TASKS_TO_LEASE = 1;
@@ -114,6 +125,8 @@ public class Program {
 	private static final String TH_OUTPUT = "th";
 	private static final String BF_OUTPUT = "bf";
 
+	private static Session session = null;
+
 	public static void main(String[] args) throws Exception {
 
 		SystemConfigurator.get().configure();
@@ -122,10 +135,6 @@ public class Program {
 
 		LOGGER.info("pulling message from the model");
 		runModelTasks();
-
-		LOGGER.info("marking message as processed");
-
-		LOGGER.info("putting message into the predict queue");
 	}
 
 	private static Credential authorize() throws Exception {
@@ -161,7 +170,7 @@ public class Program {
 					}
 				}).build();
 
-//		dummyInsert(taskQueueApi);
+		// dummyInsert(taskQueueApi);
 
 		TaskQueue modelQueue = getQueue(taskQueueApi, MODEL_QUEUE_NAME);
 		LOGGER.info(modelQueue);
@@ -169,88 +178,214 @@ public class Program {
 		// TaskQueue predictQueue = getQueue(taskQueueApi, PREDICT_QUEUE_NAME);
 		// LOGGER.info(predictQueue);
 
-		Tasks tasks = getLeasedTasks(taskQueueApi, MODEL_QUEUE_NAME);
-		if ((tasks.getItems() == null) || (tasks.getItems().size() == 0)) {
-			LOGGER.info("No tasks to lease");
-		} else {
-			if (tasks != null && tasks.size() > 0) {
-				loadItemsIaps();
-			}
+		while (true) {
+			Tasks tasks = getLeasedTasks(taskQueueApi, MODEL_QUEUE_NAME);
+			if ((tasks.getItems() == null) && (tasks.getItems().size() == 0)) {
+				LOGGER.info("No tasks to lease going to sleep");
 
-			Task predictTask;
-			StringBuffer sb = new StringBuffer();
+				Thread.sleep(DEFAULT_LEASE_DURATION / 4);
+			} else {
+				if (tasks != null && tasks.size() > 0) {
+					loadItemsIaps();
+				}
 
-			for (Task leasedTask : tasks.getItems()) {
-				LOGGER.info("run R script");
-				Map<String, String> mappedParams = new HashMap<String, String>();
+				for (Task leasedTask : tasks.getItems()) {
+					LOGGER.info("run R script");
+					Map<String, String> mappedParams = new HashMap<String, String>();
 
-				if (executeModelTask(leasedTask, mappedParams)) {
-					sb.setLength(0);
+					if (executeModelTask(leasedTask, mappedParams)) {
+						try {
+							callApiTriggerPredict(mappedParams);
 
-					predictTask = new Task();
-
-					sb.append("/");
-					sb.append(PREDICT_QUEUE_NAME);
-					sb.append("?country=");
-					sb.append(mappedParams.get("country"));
-					sb.append("&store=");
-					sb.append(mappedParams.get("store"));
-					sb.append("&type=");
-					sb.append(mappedParams.get("type"));
-					sb.append("&code=");
-					sb.append(mappedParams.get("code"));
-
-					predictTask.setPayloadBase64(new String(Base64.encodeBase64(sb.toString().getBytes())));
-
-					insertTask(taskQueueApi, predictTask, PREDICT_QUEUE_NAME);
-
-					LOGGER.info("Deleting successfully complete model task");
-					deleteTask(taskQueueApi, leasedTask, MODEL_QUEUE_NAME);
-				} else {
-					LOGGER.error("Could not complete model task");
-					expireTaskLease(taskQueueApi, leasedTask, MODEL_QUEUE_NAME);
+							LOGGER.info("Deleting successfully complete model task");
+							deleteTask(taskQueueApi, leasedTask, MODEL_QUEUE_NAME);
+						} catch (Throwable caught) {
+							LOGGER.error("Could not complete model task - expiring lease", caught);
+							expireTaskLease(taskQueueApi, leasedTask, MODEL_QUEUE_NAME);
+						}
+					} else {
+						LOGGER.error("Could not complete model task");
+						expireTaskLease(taskQueueApi, leasedTask, MODEL_QUEUE_NAME);
+					}
 				}
 			}
 		}
 	}
 
-//	/**
-//	 * @param taskQueueApi
-//	 * @throws IOException
-//	 * 
-//	 */
-//	private static void dummyInsert(Taskqueue taskQueueApi) throws IOException {
-//
-//		StringBuffer sb = new StringBuffer();
-//		sb.setLength(0);
-//
-//		Map<String, String> mappedParams = new HashMap<String, String>();
-//		mappedParams.put("country", "us");
-//		mappedParams.put("store", "ios");
-//		mappedParams.put("type", "topfreeapplications");
-//		mappedParams.put("code", "892");
-//
-//		Task predictTask = new Task();
-//
-//		sb.append("/");
-//		sb.append(PREDICT_QUEUE_NAME);
-////		sb.append("?country=");
-////		sb.append(mappedParams.get("country"));
-////		sb.append("&store=");
-////		sb.append(mappedParams.get("store"));
-////		sb.append("&type=");
-////		sb.append(mappedParams.get("type"));
-////		sb.append("&code=");
-////		sb.append(mappedParams.get("code"));
-//
-//		predictTask.setQueueName(PREDICT_QUEUE_NAME);
-//		predictTask.setPayloadBase64(new String(Base64.encodeBase64(sb.toString().getBytes())));
-//
-//		insertTask(taskQueueApi, predictTask, PREDICT_QUEUE_NAME);
-//
-//		throw new RuntimeException("Stop");
-//
-//	}
+	private static void callApiTriggerPredict(final Map<String, String> parameters) throws InterruptedException, ExecutionException {
+
+		if (session == null) {
+			callApiLogin(parameters);
+		} else {
+			String store = parameters.get("store");
+			String country = parameters.get("country");
+			String type = parameters.get("type");
+			String codeParam = parameters.get("code");
+			Long code = codeParam == null ? null : Long.valueOf(codeParam);
+
+			Country c = new Country();
+			c.a2Code = country;
+
+			Store s = new Store();
+			s.a3Code = store;
+
+			Collector collector = CollectorFactory.getCollectorForStore(store);
+			List<String> listTypes = new ArrayList<String>();
+			listTypes.addAll(collector.getCounterpartTypes(type));
+			listTypes.add(type);
+
+			AdminService admin = new AdminService();
+			admin.setUrl(System.getProperty(SystemConfigurator.ADMIN_SERVICE_URL_KEY));
+
+			final TriggerPredictRequest input = new TriggerPredictRequest();
+			input.accessCode = System.getProperty(SystemConfigurator.CLIENT_API_TOKEN_KEY);
+			input.session = getSessionForApiCall();
+			input.code = code;
+			input.country = c;
+			input.store = s;
+			input.listTypes = listTypes;
+
+			admin.triggerPredict(input, new JsonService.AsyncCallback<TriggerPredictResponse>() {
+
+				public void onSuccess(TriggerPredictResponse output) {
+					if (output.status == StatusType.StatusTypeSuccess) {
+						LOGGER.info(String.format("Triggered gather for %s", parameters.toString()));
+					} else {
+						if (output.error != null
+								&& output.error.code != null
+								&& (ApiError.SessionNoLookup.isCode(output.error.code) || ApiError.SessionNull.isCode(output.error.code) || ApiError.SessionNotFound
+										.isCode(output.error.code))) {
+							LOGGER.info("There is an issue with the session, resetting and trigger again");
+
+							session = null;
+
+							try {
+								callApiTriggerPredict(parameters);
+							} catch (Throwable caught) {
+								LOGGER.error("An error occured while calling Api Trigger predict", caught);
+								throw new RuntimeException(caught);
+							}
+						}
+					}
+				}
+
+				public void onFailure(Throwable caught) {
+					LOGGER.error("An error occured triggering predict", caught);
+					throw new RuntimeException(caught);
+				}
+			}).get();
+		}
+
+	}
+
+	private static Session getSessionForApiCall() {
+		Session apiSession = null;
+
+		if (session != null) {
+			apiSession = new Session();
+			apiSession.token = session.token;
+		}
+
+		return apiSession;
+	}
+
+	private static void callApiLogin(final Map<String, String> parameters) {
+		CoreService core = new CoreService();
+		core.setUrl(System.getProperty(SystemConfigurator.CORE_SERVICE_URL_KEY));
+
+		final LoginRequest input = new LoginRequest();
+		input.accessCode = System.getProperty(SystemConfigurator.CLIENT_API_TOKEN_KEY);
+
+		input.username = System.getProperty(SystemConfigurator.ADMIN_SERVICE_USERNAME_KEY);
+		input.password = System.getProperty(SystemConfigurator.ADMIN_SERVICE_PASSWORD_KEY);
+
+		input.longTerm = Boolean.TRUE;
+
+		try {
+			core.login(input, new JsonService.AsyncCallback<LoginResponse>() {
+
+				public void onSuccess(LoginResponse output) {
+					if (output.status == StatusType.StatusTypeSuccess) {
+						if (output.session != null) {
+							session = output.session;
+
+							try {
+								callApiTriggerPredict(parameters);
+							} catch (Throwable caught) {
+								LOGGER.error("An error occured while calling Api Trigger predict", caught);
+								throw new RuntimeException(caught);
+							}
+						} else {
+							throw new RuntimeException("Could not login (session is null)");
+						}
+					} else {
+						throw new RuntimeException(String.format("Could not login (%s - %s)",
+								output.error.code == null ? "no error code" : output.error.code.toString(), output.error.message == null ? "no error message"
+										: output.error.message));
+					}
+				}
+
+				public void onFailure(Throwable caught) {
+					LOGGER.error("An error occured while logging in", caught);
+					throw new RuntimeException(caught);
+				}
+			}).get();
+		} catch (Throwable caught) {
+			LOGGER.error("An error occured while calling Api Login", caught);
+			throw new RuntimeException(caught);
+		}
+	}
+
+	// /**
+	// * @param taskQueueApi
+	// * @throws IOException
+	// *
+	// */
+	// private static void dummyInsert(Taskqueue taskQueueApi) throws
+	// IOException {
+	//
+	// StringBuffer sb = new StringBuffer();
+	// sb.setLength(0);
+	//
+	// Map<String, String> mappedParams = new HashMap<String, String>();
+	// mappedParams.put("country", "us");
+	// mappedParams.put("store", "ios");
+	// mappedParams.put("type", "topfreeapplications");
+	// mappedParams.put("code", "892");
+	//
+	// Task predictTask = new Task();
+	//
+	// sb.append("/");
+	// sb.append(PREDICT_QUEUE_NAME);
+	// sb.append("?country=");
+	// sb.append(mappedParams.get("country"));
+	// sb.append("&store=");
+	// sb.append(mappedParams.get("store"));
+	// sb.append("&type=");
+	// sb.append(mappedParams.get("type"));
+	// sb.append("&code=");
+	// sb.append(mappedParams.get("code"));
+	//
+	// predictTask.setQueueName(PREDICT_QUEUE_NAME);
+	// predictTask.setPayloadBase64(new
+	// String(Base64.encodeBase64(sb.toString().getBytes())));
+	//
+	// insertTask(taskQueueApi, predictTask, PREDICT_QUEUE_NAME);
+	//
+	// throw new RuntimeException("Stopped dummy");
+	//
+	// }
+	//
+	// public static void dummyInsert1() throws InterruptedException,
+	// ExecutionException {
+	// Map<String, String> mappedParams = new HashMap<String, String>();
+	// mappedParams.put("country", "us");
+	// mappedParams.put("store", "ios");
+	// mappedParams.put("type", "topfreeapplications");
+	// mappedParams.put("code", "892");
+	//
+	// callApiTriggerPredict(mappedParams);
+	// }
 
 	public static boolean parseParams(String[] args) {
 		try {
@@ -478,10 +613,12 @@ public class Program {
 		LOGGER.debug("Exiting runRScript");
 	}
 
-	private static void insertTask(Taskqueue taskQueue, Task task, String taskQueueName) throws IOException {
-		Taskqueue.Tasks.Insert request = taskQueue.tasks().insert(PROJECT_NAME, taskQueueName, task);
-		request.execute();
-	}
+	// private static void insertTask(Taskqueue taskQueue, Task task, String
+	// taskQueueName) throws IOException {
+	// Taskqueue.Tasks.Insert request = taskQueue.tasks().insert(PROJECT_NAME,
+	// taskQueueName, task);
+	// request.execute();
+	// }
 
 	private static void deleteTask(Taskqueue taskQueue, Task task, String taskQueueName) throws IOException {
 		Taskqueue.Tasks.Delete request = taskQueue.tasks().delete(PROJECT_NAME, taskQueueName, task.getId());

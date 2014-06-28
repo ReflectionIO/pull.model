@@ -20,6 +20,7 @@ public class JsonService {
 	}
 
 	protected String url;
+	protected AsyncHttpClient client = new AsyncHttpClient();
 
 	public String getUrl() {
 		return url;
@@ -48,16 +49,7 @@ public class JsonService {
 		builder.setHeader("Content-Type", "application/x-www-form-urlencoded");
 		builder.setBody(requestData.getBytes());
 
-		AsyncHttpClient client = new AsyncHttpClient();
-		ListenableFuture<T> future = null;
-
-		try {
-			future = client.executeRequest(builder.build(), callback);
-		} finally {
-			client.close();
-		}
-
-		return future;
+		return client.executeRequest(builder.build(), callback);
 	}
 
 	protected <T extends Response> void onCallStart(JsonService origin, String callName, Request input, ListenableFuture<T> requestHandle) {
@@ -68,5 +60,4 @@ public class JsonService {
 
 	protected void onCallFailure(JsonService origin, String callName, Request input, Throwable caught) {
 	}
-
 }
