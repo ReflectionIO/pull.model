@@ -19,8 +19,10 @@ import java.util.Date;
  * 
  */
 public class DoneHelper {
+	private static final String DONE_FILE_EXTENTION = ".done";
+
 	public static void writeDoneFile(String filePath) throws IOException {
-		String doneFilePath = filePath + ".done";
+		String doneFilePath = getDoneFileName(filePath);
 
 		FileOutputStream out = null;
 
@@ -35,7 +37,7 @@ public class DoneHelper {
 	}
 
 	public static Date doneAt(String filePath) throws IOException, ParseException {
-		String doneFilePath = filePath + ".done";
+		String doneFilePath = getDoneFileName(filePath);
 		Date date = null;
 		FileInputStream in = null;
 
@@ -54,5 +56,9 @@ public class DoneHelper {
 		}
 
 		return date;
+	}
+
+	public static String getDoneFileName(String filePath) {
+		return filePath + DONE_FILE_EXTENTION;
 	}
 }
