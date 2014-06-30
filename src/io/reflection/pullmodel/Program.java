@@ -451,15 +451,13 @@ public class Program {
 		// RankServiceProvider.provide().getCodeLastRankDate(code);
 
 		try {
-			String freeFileRef = contextBasedName("free", store.a3Code, country.a2Code, type, code.toString());
-			String paidFileRef = contextBasedName("paid", store.a3Code, country.a2Code, type, code.toString());
 
 			// String freeFilePath = createInputFile(s, c, listTypes, date,
 			// "`price`=0", freeFileRef);
 			// String paidFilePath = createInputFile(s, c, listTypes, date,
 			// "`price`<>0", paidFileRef);
-			String freeFilePath = createInputFile(store, country, listTypes, code, "`price`=0", freeFileRef);
-			String paidFilePath = createInputFile(store, country, listTypes, code, "`price`<>0", paidFileRef);
+			String freeFilePath = createInputFile(store, country, type, listTypes, code, "`price`=0", "free");
+			String paidFilePath = createInputFile(store, country, type, listTypes, code, "`price`<>0", "paid");
 
 			Modeller modeller = ModellerFactory.getModellerForStore(store.a3Code);
 
@@ -477,7 +475,10 @@ public class Program {
 			deleteFile(ROBUST_OUTPUT_PATH);
 
 			deleteFile(freeFilePath);
+			deleteFile(DoneHelper.getDoneFileName(freeFilePath));
+
 			deleteFile(paidFilePath);
+			deleteFile(DoneHelper.getDoneFileName(paidFilePath));
 
 			success = true;
 		} catch (Exception e) {
@@ -509,74 +510,94 @@ public class Program {
 
 	// private static String createInputFile(Store store, Country country,
 	// List<String> listTypes, Date date, String priceQuery, String fileRef)
-	private static String createInputFile(Store store, Country country, List<String> listTypes, Long code, String priceQuery, String fileRef)
+	private static String createInputFile(Store store, Country country, String type, List<String> listTypes, Long code, String priceQuery, String fileRef)
 			throws IOException, DataAccessException {
-		String inputFilePath = fileRef + ".csv";
+		String inputFilePath = contextBasedName(fileRef, store.a3Code, country.a2Code, type, code.toString()) + ".csv";
 
-		FileWriter writer = null;
+		boolean createFile = false;
 
-		String typesQueryPart = null;
-		if (listTypes.size() == 1) {
-			typesQueryPart = String.format("`type`='%s'", listTypes.get(0));
+		if (new File(inputFilePath).exists()) {
+			if (new File(DoneHelper.getDoneFileName(inputFilePath)).exists()) {
+				// do nothing
+			} else {
+				deleteFile(inputFilePath);
+				createFile = true;
+			}
 		} else {
-			typesQueryPart = "`type` IN ('" + StringUtils.join(listTypes, "','") + "')";
+			if (new File(DoneHelper.getDoneFileName(inputFilePath)).exists()) {
+				deleteFile(DoneHelper.getDoneFileName(inputFilePath));
+			}
+
+			createFile = true;
 		}
 
-		Category category = CategoryServiceProvider.provide().getAllCategory(store);
+		if (createFile) {
+			FileWriter writer = null;
 
-		// String query = String
-		// .format("SELECT `r`.`itemid`, `r`.`position`,`r`.`grossingposition`, `r`.`price` FROM `rank` AS `r` WHERE `r`.`country`='%s' AND `r`.`categoryid`=%d AND `r`.`source`='%s' AND %s AND `r`.%s AND `date`<FROM_UNIXTIME(%d)"
-		// + " ORDER BY `date` DESC", country.a2Code, category.id.longValue(),
-		// store.a3Code, priceQuery, typesQueryPart, date.getTime() / 1000);
-
-		String query = String
-				.format("SELECT `r`.`itemid`, `r`.`position`,`r`.`grossingposition`, `r`.`price` FROM `rank` AS `r` WHERE `r`.`country`='%s' AND `r`.`categoryid`=%d AND `r`.`source`='%s' AND %s AND `r`.%s AND `code2`<=%d",
-						country.a2Code, category.id.longValue(), store.a3Code, priceQuery, typesQueryPart, code.longValue());
-
-		Connection rankConnection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeRank.toString());
-
-		try {
-			rankConnection.connect();
-			rankConnection.executeQuery(query.toString());
-
-			writer = new FileWriter(inputFilePath);
-
-			writer.append("#item id,top position,grossing position,price,usesiap");
-
-			String itemId;
-
-			while (rankConnection.fetchNextRow()) {
-				writer.append("\n");
-
-				writer.append("\"");
-				writer.append(itemId = rankConnection.getCurrentRowString("itemid"));
-				writer.append("\",");
-
-				Integer topPosition = rankConnection.getCurrentRowInteger("position");
-				writer.append(topPosition == null || topPosition.intValue() == 0 ? "NA" : topPosition.toString());
-				writer.append(",");
-
-				Integer grossingPosition = rankConnection.getCurrentRowInteger("grossingposition");
-				writer.append(grossingPosition == null || grossingPosition.intValue() == 0 ? "NA" : grossingPosition.toString());
-				writer.append(",");
-
-				double price = rankConnection.getCurrentRowInteger("price").intValue() / 100.0;
-				writer.append(Double.toString(price));
-				writer.append(",");
-
-				String usesIap = lookupItemIap(itemId);
-				writer.append(usesIap);
+			String typesQueryPart = null;
+			if (listTypes.size() == 1) {
+				typesQueryPart = String.format("`type`='%s'", listTypes.get(0));
+			} else {
+				typesQueryPart = "`type` IN ('" + StringUtils.join(listTypes, "','") + "')";
 			}
 
-			DoneHelper.writeDoneFile(inputFilePath);
+			Category category = CategoryServiceProvider.provide().getAllCategory(store);
 
-		} finally {
-			if (rankConnection != null) {
-				rankConnection.disconnect();
-			}
+			// String query = String
+			// .format("SELECT `r`.`itemid`, `r`.`position`,`r`.`grossingposition`, `r`.`price` FROM `rank` AS `r` WHERE `r`.`country`='%s' AND `r`.`categoryid`=%d AND `r`.`source`='%s' AND %s AND `r`.%s AND `date`<FROM_UNIXTIME(%d)"
+			// + " ORDER BY `date` DESC", country.a2Code,
+			// category.id.longValue(),
+			// store.a3Code, priceQuery, typesQueryPart, date.getTime() / 1000);
 
-			if (writer != null) {
-				writer.close();
+			String query = String
+					.format("SELECT `r`.`itemid`, `r`.`position`,`r`.`grossingposition`, `r`.`price` FROM `rank` AS `r` WHERE `r`.`country`='%s' AND `r`.`categoryid`=%d AND `r`.`source`='%s' AND %s AND `r`.%s AND `code2`<=%d",
+							country.a2Code, category.id.longValue(), store.a3Code, priceQuery, typesQueryPart, code.longValue());
+
+			Connection rankConnection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeRank.toString());
+
+			try {
+				rankConnection.connect();
+				rankConnection.executeQuery(query.toString());
+
+				writer = new FileWriter(inputFilePath);
+
+				writer.append("#item id,top position,grossing position,price,usesiap");
+
+				String itemId;
+
+				while (rankConnection.fetchNextRow()) {
+					writer.append("\n");
+
+					writer.append("\"");
+					writer.append(itemId = rankConnection.getCurrentRowString("itemid"));
+					writer.append("\",");
+
+					Integer topPosition = rankConnection.getCurrentRowInteger("position");
+					writer.append(topPosition == null || topPosition.intValue() == 0 ? "NA" : topPosition.toString());
+					writer.append(",");
+
+					Integer grossingPosition = rankConnection.getCurrentRowInteger("grossingposition");
+					writer.append(grossingPosition == null || grossingPosition.intValue() == 0 ? "NA" : grossingPosition.toString());
+					writer.append(",");
+
+					double price = rankConnection.getCurrentRowInteger("price").intValue() / 100.0;
+					writer.append(Double.toString(price));
+					writer.append(",");
+
+					String usesIap = lookupItemIap(itemId);
+					writer.append(usesIap);
+				}
+
+				DoneHelper.writeDoneFile(inputFilePath);
+
+			} finally {
+				if (rankConnection != null) {
+					rankConnection.disconnect();
+				}
+
+				if (writer != null) {
+					writer.close();
+				}
 			}
 		}
 
