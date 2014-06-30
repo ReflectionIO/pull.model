@@ -31,7 +31,6 @@ import io.reflection.app.repackaged.scphopr.service.database.DatabaseType;
 import io.reflection.app.service.category.CategoryServiceProvider;
 import io.reflection.app.service.feedfetch.FeedFetchServiceProvider;
 import io.reflection.app.service.modelrun.ModelRunServiceProvider;
-import io.reflection.app.service.rank.RankServiceProvider;
 import io.reflection.app.shared.util.DataTypeHelper;
 import io.reflection.pullmodel.json.service.client.AdminService;
 import io.reflection.pullmodel.json.service.client.CoreService;
@@ -46,7 +45,6 @@ import java.io.InputStreamReader;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -133,7 +131,6 @@ public class Program {
 
 		parseParams(args);
 
-		LOGGER.info("pulling message from the model");
 		runModelTasks();
 	}
 
@@ -161,8 +158,10 @@ public class Program {
 		httpTransport = GoogleNetHttpTransport.newTrustedTransport();
 		dataStoreFactory = new FileDataStoreFactory(DATA_STORE_DIR);
 
+		LOGGER.debug("Authenticating");
 		Credential credential = authorize();
 
+		LOGGER.debug("Initialising task queue api");
 		Taskqueue taskQueueApi = new Taskqueue.Builder(httpTransport, JSON_FACTORY, credential).setApplicationName(APPLICATION_NAME)
 				.setTaskqueueRequestInitializer(new TaskqueueRequestInitializer() {
 					public void initializeTaskqueueRequest(TaskqueueRequest<?> request) {
@@ -172,12 +171,14 @@ public class Program {
 
 		// dummyInsert(taskQueueApi);
 
+		LOGGER.debug("Getting model queue");
 		TaskQueue modelQueue = getQueue(taskQueueApi, MODEL_QUEUE_NAME);
 		LOGGER.info(modelQueue);
 
 		// TaskQueue predictQueue = getQueue(taskQueueApi, PREDICT_QUEUE_NAME);
 		// LOGGER.info(predictQueue);
 
+		LOGGER.info("pulling message from the model");
 		while (true) {
 			Tasks tasks = getLeasedTasks(taskQueueApi, MODEL_QUEUE_NAME);
 			if ((tasks.getItems() == null) && (tasks.getItems().size() == 0)) {
@@ -193,9 +194,39 @@ public class Program {
 					LOGGER.info("run R script");
 					Map<String, String> mappedParams = new HashMap<String, String>();
 
-					if (executeModelTask(leasedTask, mappedParams)) {
+					String parameters = leasedTask.getPayloadBase64();
+					String decodedParameters = new String(Base64.decodeBase64(parameters.getBytes()));
+
+					if (decodedParameters != null) {
+						String[] parts = decodedParameters.split("&");
+
+						String[] subParts = null;
+						for (String part : parts) {
+							subParts = part.split("=");
+							mappedParams.put(subParts[0], subParts[1]);
+						}
+					}
+
+					String store = mappedParams.get("store");
+					String country = mappedParams.get("country");
+					String type = mappedParams.get("type");
+					String codeParam = mappedParams.get("code");
+					Long code = codeParam == null ? null : Long.valueOf(codeParam);
+
+					Country c = new Country();
+					c.a2Code = country;
+
+					Store s = new Store();
+					s.a3Code = store;
+
+					Collector collector = CollectorFactory.getCollectorForStore(store);
+					List<String> listTypes = new ArrayList<String>();
+					listTypes.addAll(collector.getCounterpartTypes(type));
+					listTypes.add(type);
+
+					if (executeModelTask(leasedTask, s, c, type, listTypes, code)) {
 						try {
-							callApiTriggerPredict(mappedParams);
+							callApiTriggerPredict(s, c, type, listTypes, code);
 
 							LOGGER.info("Deleting successfully complete model task");
 							deleteTask(taskQueueApi, leasedTask, MODEL_QUEUE_NAME);
@@ -212,27 +243,12 @@ public class Program {
 		}
 	}
 
-	private static void callApiTriggerPredict(final Map<String, String> parameters) throws InterruptedException, ExecutionException {
+	private static void callApiTriggerPredict(final Store store, final Country country, final String type, final List<String> listTypes, final Long code)
+			throws InterruptedException, ExecutionException {
 
 		if (session == null) {
-			callApiLogin(parameters);
+			callApiLogin(store, country, type, listTypes, code);
 		} else {
-			String store = parameters.get("store");
-			String country = parameters.get("country");
-			String type = parameters.get("type");
-			String codeParam = parameters.get("code");
-			Long code = codeParam == null ? null : Long.valueOf(codeParam);
-
-			Country c = new Country();
-			c.a2Code = country;
-
-			Store s = new Store();
-			s.a3Code = store;
-
-			Collector collector = CollectorFactory.getCollectorForStore(store);
-			List<String> listTypes = new ArrayList<String>();
-			listTypes.addAll(collector.getCounterpartTypes(type));
-			listTypes.add(type);
 
 			AdminService admin = new AdminService();
 			admin.setUrl(System.getProperty(SystemConfigurator.ADMIN_SERVICE_URL_KEY));
@@ -241,15 +257,16 @@ public class Program {
 			input.accessCode = System.getProperty(SystemConfigurator.CLIENT_API_TOKEN_KEY);
 			input.session = getSessionForApiCall();
 			input.code = code;
-			input.country = c;
-			input.store = s;
+			input.country = country;
+			input.store = store;
 			input.listTypes = listTypes;
 
 			admin.triggerPredict(input, new JsonService.AsyncCallback<TriggerPredictResponse>() {
 
 				public void onSuccess(TriggerPredictResponse output) {
 					if (output.status == StatusType.StatusTypeSuccess) {
-						LOGGER.info(String.format("Triggered gather for %s", parameters.toString()));
+						LOGGER.info(String.format("Triggered predict for store [%s], country [%s], type [%s], code [%d] ", store.a3Code, country.a2Code, type,
+								code.longValue()));
 					} else {
 						if (output.error != null
 								&& output.error.code != null
@@ -260,7 +277,7 @@ public class Program {
 							session = null;
 
 							try {
-								callApiTriggerPredict(parameters);
+								callApiTriggerPredict(store, country, type, listTypes, code);
 							} catch (Throwable caught) {
 								LOGGER.error("An error occured while calling Api Trigger predict", caught);
 								throw new RuntimeException(caught);
@@ -271,6 +288,8 @@ public class Program {
 
 				public void onFailure(Throwable caught) {
 					LOGGER.error("An error occured triggering predict", caught);
+					// FIXME: this exception is not caught because it is not on
+					// the same thread
 					throw new RuntimeException(caught);
 				}
 			}).get();
@@ -289,7 +308,7 @@ public class Program {
 		return apiSession;
 	}
 
-	private static void callApiLogin(final Map<String, String> parameters) {
+	private static void callApiLogin(final Store store, final Country country, final String type, final List<String> listType, final Long code) {
 		CoreService core = new CoreService();
 		core.setUrl(System.getProperty(SystemConfigurator.CORE_SERVICE_URL_KEY));
 
@@ -310,7 +329,7 @@ public class Program {
 							session = output.session;
 
 							try {
-								callApiTriggerPredict(parameters);
+								callApiTriggerPredict(store, country, type, listType, code);
 							} catch (Throwable caught) {
 								LOGGER.error("An error occured while calling Api Trigger predict", caught);
 								throw new RuntimeException(caught);
@@ -327,6 +346,8 @@ public class Program {
 
 				public void onFailure(Throwable caught) {
 					LOGGER.error("An error occured while logging in", caught);
+					// FIXME: this exception is not caught because it is not on
+					// the same thread
 					throw new RuntimeException(caught);
 				}
 			}).get();
@@ -421,89 +442,74 @@ public class Program {
 	 * @throws URISyntaxException
 	 * @throws DataAccessException
 	 */
-	private static boolean executeModelTask(Task task, Map<String, String> mappedParams) throws IOException, URISyntaxException, DataAccessException {
-		LOGGER.info("Payload for the task:");
+	private static boolean executeModelTask(Task task, Store store, Country country, String type, List<String> listTypes, Long code) throws IOException,
+			URISyntaxException, DataAccessException {
 
 		boolean success = false;
 
-		String parameters = task.getPayloadBase64();
-		LOGGER.info(parameters);
+		// Date date =
+		// RankServiceProvider.provide().getCodeLastRankDate(code);
 
-		if (mappedParams == null) {
-			mappedParams = new HashMap<String, String>();
-		}
+		try {
+			String freeFileRef = contextBasedName("free", store.a3Code, country.a2Code, type, code.toString());
+			String paidFileRef = contextBasedName("paid", store.a3Code, country.a2Code, type, code.toString());
 
-		if (parameters != null) {
-			String decodedParameters = new String(Base64.decodeBase64(parameters.getBytes()));
+			// String freeFilePath = createInputFile(s, c, listTypes, date,
+			// "`price`=0", freeFileRef);
+			// String paidFilePath = createInputFile(s, c, listTypes, date,
+			// "`price`<>0", paidFileRef);
+			String freeFilePath = createInputFile(store, country, listTypes, code, "`price`=0", freeFileRef);
+			String paidFilePath = createInputFile(store, country, listTypes, code, "`price`<>0", paidFileRef);
 
-			if (decodedParameters != null) {
-				String[] parts = decodedParameters.split("&");
+			Modeller modeller = ModellerFactory.getModellerForStore(store.a3Code);
 
-				String[] subParts = null;
-				for (String part : parts) {
-					subParts = part.split("=");
-					mappedParams.put(subParts[0], subParts[1]);
-				}
-			}
+			String outputPath = contextBasedName(ROBUST_OUTPUT_PATH, store.a3Code, country.a2Code, type, code.toString());
 
-			String store = mappedParams.get("store");
-			String country = mappedParams.get("country");
-			String type = mappedParams.get("type");
-			String codeParam = mappedParams.get("code");
-			Long code = codeParam == null ? null : Long.valueOf(codeParam);
+			// runRScriptWithParameters("model.R", freeFilePath,
+			// paidFilePath, TRUNCATED_OUTPUT_PATH, "400", "40", "500000");
+			runRScriptWithParameters("robustModel.R", freeFilePath, paidFilePath, outputPath, "200", "40", "500000");
 
-			LOGGER.info("Running task with parameters");
+			persistValues(ROBUST_OUTPUT_PATH, store, country, modeller.getForm(type), code);
 
-			LOGGER.debug(String.format("store: [%s]", store));
-			LOGGER.debug(String.format("country: [%s]", country));
-			LOGGER.debug(String.format("type: [%s]", type));
-			LOGGER.debug(String.format("code: [%s]", codeParam));
+			alterFeedFetchStatus(store, country, listTypes, code);
 
-			Date date = RankServiceProvider.provide().getCodeLastRankDate(code);
+			// deleteFile(TRUNCATED_OUTPUT_PATH);
+			deleteFile(ROBUST_OUTPUT_PATH);
 
-			try {
-				Country c = new Country();
-				c.a2Code = country;
+			deleteFile(freeFilePath);
+			deleteFile(paidFilePath);
 
-				Store s = new Store();
-				s.a3Code = store;
-
-				Collector collector = CollectorFactory.getCollectorForStore(store);
-				List<String> listTypes = new ArrayList<String>();
-				listTypes.addAll(collector.getCounterpartTypes(type));
-				listTypes.add(type);
-
-				String freeFilePath = createInputFile(s, c, listTypes, date, "`price`=0", "free");
-				String paidFilePath = createInputFile(s, c, listTypes, date, "`price`<>0", "paid");
-
-				Modeller modeller = ModellerFactory.getModellerForStore(store);
-
-				// runRScriptWithParameters("model.R", freeFilePath,
-				// paidFilePath, TRUNCATED_OUTPUT_PATH, "400", "40", "500000");
-				runRScriptWithParameters("robustModel.R", freeFilePath, paidFilePath, ROBUST_OUTPUT_PATH, "200", "40", "500000");
-
-				persistValues(ROBUST_OUTPUT_PATH, c, s, modeller.getForm(type), code);
-
-				alterFeedFetchStatus(c, s, listTypes, code);
-
-				// deleteFile(TRUNCATED_OUTPUT_PATH);
-				deleteFile(ROBUST_OUTPUT_PATH);
-
-				deleteFile(freeFilePath);
-				deleteFile(paidFilePath);
-
-				success = true;
-			} catch (Exception e) {
-				LOGGER.error("Error running script", e);
-				LOGGER.fatal(String.format("Error occured calculating values with parameters store [%s], country [%s], type [%s], [%s]", store, country, type,
-						date == null ? "null" : Long.toString(date.getTime())), e);
-			}
+			success = true;
+		} catch (Exception e) {
+			LOGGER.error("Error running script", e);
+			LOGGER.fatal(String.format("Error occured calculating values with parameters store [%s], country [%s], type [%s], [%s]", store, country, type,
+					code == null ? "null" : code.toString()), e);
 		}
 
 		return success;
 	}
 
-	private static String createInputFile(Store store, Country country, List<String> listTypes, Date date, String priceQuery, String fileRef)
+	/**
+	 * @param string
+	 * @param parameters
+	 * @return
+	 */
+	private static String contextBasedName(String name, String... parameters) {
+		StringBuffer sb = new StringBuffer();
+
+		for (String parameter : parameters) {
+			sb.append(parameter);
+			sb.append("_");
+		}
+
+		sb.append(name);
+
+		return sb.toString();
+	}
+
+	// private static String createInputFile(Store store, Country country,
+	// List<String> listTypes, Date date, String priceQuery, String fileRef)
+	private static String createInputFile(Store store, Country country, List<String> listTypes, Long code, String priceQuery, String fileRef)
 			throws IOException, DataAccessException {
 		String inputFilePath = fileRef + ".csv";
 
@@ -518,9 +524,14 @@ public class Program {
 
 		Category category = CategoryServiceProvider.provide().getAllCategory(store);
 
+		// String query = String
+		// .format("SELECT `r`.`itemid`, `r`.`position`,`r`.`grossingposition`, `r`.`price` FROM `rank` AS `r` WHERE `r`.`country`='%s' AND `r`.`categoryid`=%d AND `r`.`source`='%s' AND %s AND `r`.%s AND `date`<FROM_UNIXTIME(%d)"
+		// + " ORDER BY `date` DESC", country.a2Code, category.id.longValue(),
+		// store.a3Code, priceQuery, typesQueryPart, date.getTime() / 1000);
+
 		String query = String
-				.format("SELECT `r`.`itemid`, `r`.`position`,`r`.`grossingposition`, `r`.`price` FROM `rank` AS `r` WHERE `r`.`country`='%s' AND `r`.`categoryid`=%d AND `r`.`source`='%s' AND %s AND `r`.%s AND `date`<FROM_UNIXTIME(%d)"
-						+ " ORDER BY `date` DESC", country.a2Code, category.id.longValue(), store.a3Code, priceQuery, typesQueryPart, date.getTime() / 1000);
+				.format("SELECT `r`.`itemid`, `r`.`position`,`r`.`grossingposition`, `r`.`price` FROM `rank` AS `r` WHERE `r`.`country`='%s' AND `r`.`categoryid`=%d AND `r`.`source`='%s' AND %s AND `r`.%s AND `code2`<=%d",
+						country.a2Code, category.id.longValue(), store.a3Code, priceQuery, typesQueryPart, code.longValue());
 
 		Connection rankConnection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeRank.toString());
 
@@ -556,6 +567,8 @@ public class Program {
 				String usesIap = lookupItemIap(itemId);
 				writer.append(usesIap);
 			}
+
+			DoneHelper.writeDoneFile(inputFilePath);
 
 		} finally {
 			if (rankConnection != null) {
@@ -648,6 +661,7 @@ public class Program {
 
 				itemIapLookup.put(itemId, DataTypeHelper.jsonPropertiesIapState(jsonProperties, "1", "0", "NA"));
 			}
+
 		} finally {
 			if (itemConnection != null) {
 				itemConnection.disconnect();
@@ -684,7 +698,7 @@ public class Program {
 	 * @param code
 	 * @throws DataAccessException
 	 */
-	private static void alterFeedFetchStatus(Country country, Store store, List<String> listTypes, Long code) throws DataAccessException {
+	private static void alterFeedFetchStatus(Store store, Country country, List<String> listTypes, Long code) throws DataAccessException {
 		List<FeedFetch> feeds = FeedFetchServiceProvider.provide().getGatherCodeFeedFetches(country, store, listTypes, code);
 
 		for (FeedFetch feedFetch : feeds) {
@@ -703,7 +717,7 @@ public class Program {
 	 * @throws IOException
 	 * 
 	 */
-	private static void persistValues(String resultsFileName, Country country, Store store, FormType form, Long code) throws DataAccessException, IOException {
+	private static void persistValues(String resultsFileName, Store store, Country country, FormType form, Long code) throws DataAccessException, IOException {
 
 		Map<String, String> results = parseOutputFile(resultsFileName);
 
