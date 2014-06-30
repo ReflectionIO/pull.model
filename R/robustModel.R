@@ -89,7 +89,7 @@ my.iap.df$iap.ind <- as.numeric(my.iap.df$usesiap == 1 )
 
 my.iap.df$iap.ind[is.na(my.iap.df$iap.ind)] <-  0
 
-my.start <- list(b0=3,b1=0.4,b2=-0.3,th=0.2)
+my.start <- list(b0=3.9614320, b1=0.3694081, b2= -0.2588174, th=25.8677287)
 
 iap.model <- nls(log(grossing.position) ~ b0 + b1*log(top.position) + b2*log(price + th*as.numeric(iap.ind)), data=my.iap.df, start=my.start)
 
