@@ -51,7 +51,8 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 import org.apache.commons.codec.binary.Base64;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp;
@@ -78,7 +79,7 @@ import com.willshex.gson.json.service.shared.StatusType;
  * 
  */
 public class Program {
-	private static final Logger LOGGER = Logger.getLogger(Program.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(Program.class);
 
 	private static final String APPLICATION_NAME = "storedatacollector";
 
@@ -87,11 +88,16 @@ public class Program {
 	private static String MODEL_QUEUE_NAME = "model";
 	// private static String PREDICT_QUEUE_NAME = "predict";
 
-	private static final int DEFAULT_LEASE_DURATION = 43200;
-	private static final int TASKS_TO_LEASE = 1;
+	private static final int DEFAULT_LEASE_DURATION_SECONDS = 3600;
+	private static final int DEFAULT_TASKS_TO_LEASE = 1;
 
-	private static int leaseSecs = DEFAULT_LEASE_DURATION;
+	private static int leaseCount = DEFAULT_TASKS_TO_LEASE;
+	private static int leaseSeconds = DEFAULT_LEASE_DURATION_SECONDS;
 	private static Boolean isComputeEngine = null;
+
+	private static int IS_COMPUTE_ENGINE_ARG_INDEX = 0;
+	private static int LEASE_SECONDS_ARG_INDEX = 1;
+	private static int LEASE_COUNT_ARG_INDEX = 2;
 
 	private static final File DATA_STORE_DIR = new File(System.getProperty("user.home"), ".store/pull_model_config");
 
@@ -173,7 +179,7 @@ public class Program {
 
 		LOGGER.debug("Getting model queue");
 		TaskQueue modelQueue = getQueue(taskQueueApi, MODEL_QUEUE_NAME);
-		LOGGER.info(modelQueue);
+		LOGGER.error(modelQueue == null ? "modelqueue coun not be obtained" : String.format("modelqueue obtained at [%s]", modelQueue.toString()));
 
 		// TaskQueue predictQueue = getQueue(taskQueueApi, PREDICT_QUEUE_NAME);
 		// LOGGER.info(predictQueue);
@@ -182,9 +188,8 @@ public class Program {
 		while (true) {
 			Tasks tasks = getLeasedTasks(taskQueueApi, MODEL_QUEUE_NAME);
 			if ((tasks.getItems() == null) && (tasks.getItems().size() == 0)) {
-				LOGGER.info("No tasks to lease going to sleep");
-
-				Thread.sleep(DEFAULT_LEASE_DURATION / 4);
+				LOGGER.info("No tasks to lease exiting");
+				break;
 			} else {
 				if (tasks != null && tasks.size() > 0) {
 					loadItemsIaps();
@@ -410,8 +415,9 @@ public class Program {
 
 	public static boolean parseParams(String[] args) {
 		try {
-			isComputeEngine = Boolean.parseBoolean(args[0]);
-			leaseSecs = Integer.parseInt(args[1]);
+			isComputeEngine = Boolean.parseBoolean(args[IS_COMPUTE_ENGINE_ARG_INDEX]);
+			leaseSeconds = Integer.parseInt(args[LEASE_SECONDS_ARG_INDEX]);
+			leaseCount = Integer.parseInt(args[LEASE_COUNT_ARG_INDEX]);
 
 			return true;
 		} catch (ArrayIndexOutOfBoundsException ae) {
@@ -431,7 +437,7 @@ public class Program {
 	}
 
 	private static Tasks getLeasedTasks(Taskqueue taskQueue, String taskQueueName) throws IOException {
-		Taskqueue.Tasks.Lease leaseRequest = taskQueue.tasks().lease(PROJECT_NAME, taskQueueName, Integer.valueOf(TASKS_TO_LEASE), Integer.valueOf(leaseSecs));
+		Taskqueue.Tasks.Lease leaseRequest = taskQueue.tasks().lease(PROJECT_NAME, taskQueueName, Integer.valueOf(leaseCount), Integer.valueOf(leaseSeconds));
 		return (Tasks) leaseRequest.execute();
 	}
 
@@ -483,7 +489,7 @@ public class Program {
 			success = true;
 		} catch (Exception e) {
 			LOGGER.error("Error running script", e);
-			LOGGER.fatal(String.format("Error occured calculating values with parameters store [%s], country [%s], type [%s], [%s]", store, country, type,
+			LOGGER.error(String.format("Error occured calculating values with parameters store [%s], country [%s], type [%s], [%s]", store, country, type,
 					code == null ? "null" : code.toString()), e);
 		}
 

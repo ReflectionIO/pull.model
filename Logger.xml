@@ -8,17 +8,19 @@
       <param name="ConversionPattern" value="%d{ISO8601} %-5p %c{1} - %m%n"/> 
     </layout> 
   </appender> 
- <!-- <appender name="rolling" class="org.apache.log4j.DailyRollingFileAppender"> 
-    <param name="file" value="./EPFLogs/EPFLog.log"/>
-    <param name="DatePattern" value="'.'yyyyMMddHHmmss"/>
+ <appender name="rolling" class="org.apache.log4j.RollingFileAppender"> 
+    <param name="file" value="logs/pull.model.log"/>
+    <param name="MaxFileSize" value="100KB"/>
+    <param name="MaxBackupIndex" value="100"/>
+    <param name="append" value="true" />
     <layout class="org.apache.log4j.PatternLayout"> 
       <param name="ConversionPattern" value="%d{ISO8601} %-5p %c{1} - %m%n"/> 
     </layout> 
-  </appender> --> 
+  </appender>
   <root> 
-    <priority value ="TRACE" /> 
+    <priority value ="DEBUG" /> 
     <appender-ref ref="console" />
-    <!-- <appender-ref ref="rolling" />  --> 
+    <appender-ref ref="rolling" /> 
   </root>
   
 </log4j:configuration>

@@ -11,10 +11,10 @@ import io.reflection.app.repackaged.scphopr.cloudsql.Connection;
 import io.reflection.app.repackaged.scphopr.service.database.IDatabaseService;
 
 import org.apache.log4j.xml.DOMConfigurator;
+import org.slf4j.bridge.SLF4JBridgeHandler;
 
 /**
  * @author William Shakour (billy1380)
- * 
  */
 public class SystemConfigurator {
 
@@ -42,6 +42,9 @@ public class SystemConfigurator {
 	}
 
 	public void configure() {
+		SLF4JBridgeHandler.removeHandlersForRootLogger();
+		SLF4JBridgeHandler.install();
+
 		DOMConfigurator.configure(LOGGER_CONFIG_PATH);
 
 		System.setProperty(IDatabaseService.DATABASE_SERVER_KEY, "173.194.104.108");
