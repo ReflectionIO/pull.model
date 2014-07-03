@@ -187,13 +187,11 @@ public class Program {
 		LOGGER.info("pulling message from the model");
 		while (true) {
 			Tasks tasks = getLeasedTasks(taskQueueApi, MODEL_QUEUE_NAME);
-			if ((tasks.getItems() == null) && (tasks.getItems().size() == 0)) {
+			if (tasks == null || tasks.getItems() == null || tasks.getItems().size() == 0) {
 				LOGGER.info("No tasks to lease exiting");
 				break;
 			} else {
-				if (tasks != null && tasks.size() > 0) {
-					loadItemsIaps();
-				}
+				loadItemsIaps();
 
 				for (Task leasedTask : tasks.getItems()) {
 					LOGGER.info("run R script");
@@ -268,6 +266,7 @@ public class Program {
 
 			admin.triggerPredict(input, new JsonService.AsyncCallback<TriggerPredictResponse>() {
 
+				@Override
 				public void onSuccess(TriggerPredictResponse output) {
 					if (output.status == StatusType.StatusTypeSuccess) {
 						LOGGER.info(String.format("Triggered predict for store [%s], country [%s], type [%s], code [%d] ", store.a3Code, country.a2Code, type,
@@ -291,6 +290,7 @@ public class Program {
 					}
 				}
 
+				@Override
 				public void onFailure(Throwable caught) {
 					LOGGER.error("An error occured triggering predict", caught);
 					// FIXME: this exception is not caught because it is not on
@@ -328,6 +328,7 @@ public class Program {
 		try {
 			core.login(input, new JsonService.AsyncCallback<LoginResponse>() {
 
+				@Override
 				public void onSuccess(LoginResponse output) {
 					if (output.status == StatusType.StatusTypeSuccess) {
 						if (output.session != null) {
@@ -349,6 +350,7 @@ public class Program {
 					}
 				}
 
+				@Override
 				public void onFailure(Throwable caught) {
 					LOGGER.error("An error occured while logging in", caught);
 					// FIXME: this exception is not caught because it is not on
