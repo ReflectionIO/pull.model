@@ -668,7 +668,7 @@ public class Program {
 	}
 
 	private static void expireTaskLease(Taskqueue taskQueue, Task task, String taskQueueName) throws IOException {
-		Taskqueue.Tasks.Patch request = taskQueue.tasks().patch(PROJECT_NAME, taskQueueName, task.getPayloadBase64(), Integer.valueOf(0), task);
+		Taskqueue.Tasks.Update request = taskQueue.tasks().update(PROJECT_NAME, taskQueueName, task.getId(), 1, task);
 		request.execute();
 	}
 
