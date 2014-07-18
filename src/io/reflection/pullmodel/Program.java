@@ -475,12 +475,12 @@ public class Program {
 			// paidFilePath, TRUNCATED_OUTPUT_PATH, "400", "40", "500000");
 			runRScriptWithParameters("robustModel.R", freeFilePath, paidFilePath, outputPath, "200", "40", "500000");
 
-			persistValues(ROBUST_OUTPUT_PATH, store, country, modeller.getForm(type), code);
+			persistValues(outputPath, store, country, modeller.getForm(type), code);
 
 			alterFeedFetchStatus(store, country, listTypes, code);
 
 			// deleteFile(TRUNCATED_OUTPUT_PATH);
-			deleteFile(ROBUST_OUTPUT_PATH);
+			deleteFile(outputPath);
 
 			deleteFile(freeFilePath);
 			deleteFile(DoneHelper.getDoneFileName(freeFilePath));
