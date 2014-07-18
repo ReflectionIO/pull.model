@@ -95,16 +95,17 @@ public class CollectorIOS implements Collector {
 	 */
 	@Override
 	public List<Long> collect(String country, String type, String category, Long code) throws DataAccessException {
-		return null;
+		throw new UnsupportedOperationException();
 	}
 
-	/* (non-Javadoc)
+	/*
+	 * (non-Javadoc)
+	 * 
 	 * @see io.reflection.app.collectors.Collector#enqueue()
 	 */
 	@Override
 	public int enqueue() {
-		// TODO Auto-generated method stub
-		return 0;
+		throw new UnsupportedOperationException();
 	}
 
 }
