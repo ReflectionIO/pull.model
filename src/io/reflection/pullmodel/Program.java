@@ -43,6 +43,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URISyntaxException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -222,12 +223,14 @@ public class Program {
 					Store s = new Store();
 					s.a3Code = store;
 
+					Category category = CategoryServiceProvider.provide().getAllCategory(s);
+
 					Collector collector = CollectorFactory.getCollectorForStore(store);
 					List<String> listTypes = new ArrayList<String>();
 					listTypes.addAll(collector.getCounterpartTypes(type));
 					listTypes.add(type);
 
-					if (executeModelTask(leasedTask, s, c, type, listTypes, code)) {
+					if (executeModelTask(leasedTask, s, c, type, listTypes, category, code)) {
 						try {
 							callApiTriggerPredict(s, c, type, listTypes, code);
 
@@ -235,11 +238,13 @@ public class Program {
 							deleteTask(taskQueueApi, leasedTask, MODEL_QUEUE_NAME);
 						} catch (Throwable caught) {
 							LOGGER.error("Could not complete model task - expiring lease", caught);
-							expireTaskLease(taskQueueApi, leasedTask, MODEL_QUEUE_NAME);
+							// expireTaskLease(taskQueueApi, leasedTask,
+							// MODEL_QUEUE_NAME);
 						}
 					} else {
 						LOGGER.error("Could not complete model task");
-						expireTaskLease(taskQueueApi, leasedTask, MODEL_QUEUE_NAME);
+						// expireTaskLease(taskQueueApi, leasedTask,
+						// MODEL_QUEUE_NAME);
 					}
 				}
 			}
@@ -450,8 +455,8 @@ public class Program {
 	 * @throws URISyntaxException
 	 * @throws DataAccessException
 	 */
-	private static boolean executeModelTask(Task task, Store store, Country country, String type, List<String> listTypes, Long code) throws IOException,
-			URISyntaxException, DataAccessException {
+	private static boolean executeModelTask(Task task, Store store, Country country, String type, List<String> listTypes, Category category, Long code)
+			throws IOException, URISyntaxException, DataAccessException {
 
 		boolean success = false;
 
@@ -464,8 +469,8 @@ public class Program {
 			// "`price`=0", freeFileRef);
 			// String paidFilePath = createInputFile(s, c, listTypes, date,
 			// "`price`<>0", paidFileRef);
-			String freeFilePath = createInputFile(store, country, type, listTypes, code, "`price`=0", "free");
-			String paidFilePath = createInputFile(store, country, type, listTypes, code, "`price`<>0", "paid");
+			String freeFilePath = createInputFile(store, country, category, type, listTypes, code, "`price`=0", "free");
+			String paidFilePath = createInputFile(store, country, category, type, listTypes, code, "`price`<>0", "paid");
 
 			Modeller modeller = ModellerFactory.getModellerForStore(store.a3Code);
 
@@ -477,7 +482,7 @@ public class Program {
 
 			persistValues(outputPath, store, country, modeller.getForm(type), code);
 
-			alterFeedFetchStatus(store, country, listTypes, code);
+			alterFeedFetchStatus(store, country, category, listTypes, code);
 
 			// deleteFile(TRUNCATED_OUTPUT_PATH);
 			deleteFile(outputPath);
@@ -518,8 +523,8 @@ public class Program {
 
 	// private static String createInputFile(Store store, Country country,
 	// List<String> listTypes, Date date, String priceQuery, String fileRef)
-	private static String createInputFile(Store store, Country country, String type, List<String> listTypes, Long code, String priceQuery, String fileRef)
-			throws IOException, DataAccessException {
+	private static String createInputFile(Store store, Country country, Category category, String type, List<String> listTypes, Long code, String priceQuery,
+			String fileRef) throws IOException, DataAccessException {
 		String inputFilePath = contextBasedName(fileRef, store.a3Code, country.a2Code, type, code.toString()) + ".csv";
 
 		boolean createFile = false;
@@ -549,8 +554,6 @@ public class Program {
 				typesQueryPart = "`type` IN ('" + StringUtils.join(listTypes, "','") + "')";
 			}
 
-			Category category = CategoryServiceProvider.provide().getAllCategory(store);
-
 			// String query = String
 			// .format("SELECT `r`.`itemid`, `r`.`position`,`r`.`grossingposition`, `r`.`price` FROM `rank` AS `r` WHERE `r`.`country`='%s' AND `r`.`categoryid`=%d AND `r`.`source`='%s' AND %s AND `r`.%s AND `date`<FROM_UNIXTIME(%d)"
 			// + " ORDER BY `date` DESC", country.a2Code,
@@ -558,7 +561,7 @@ public class Program {
 			// store.a3Code, priceQuery, typesQueryPart, date.getTime() / 1000);
 
 			String query = String
-					.format("SELECT `r`.`itemid`, `r`.`position`,`r`.`grossingposition`, `r`.`price` FROM `rank` AS `r` WHERE `r`.`country`='%s' AND `r`.`categoryid`=%d AND `r`.`source`='%s' AND %s AND `r`.%s AND `code2`<=%d",
+					.format("SELECT `r`.`itemid`, `r`.`date`, `r`.`position`,`r`.`grossingposition`, `r`.`price` FROM `rank` AS `r` WHERE `r`.`country`='%s' AND `r`.`categoryid`=%d AND `r`.`source`='%s' AND %s AND `r`.%s AND `code2`<=%d",
 							country.a2Code, category.id.longValue(), store.a3Code, priceQuery, typesQueryPart, code.longValue());
 
 			Connection rankConnection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeRank.toString());
@@ -569,7 +572,7 @@ public class Program {
 
 				writer = new FileWriter(inputFilePath);
 
-				writer.append("#item id,top position,grossing position,price,usesiap");
+				writer.append("#item id,date,top position,grossing position,price,usesiap");
 
 				String itemId;
 
@@ -579,6 +582,9 @@ public class Program {
 					writer.append("\"");
 					writer.append(itemId = rankConnection.getCurrentRowString("itemid"));
 					writer.append("\",");
+
+					writer.append((new SimpleDateFormat("yyyy-MM-dd")).format(rankConnection.getCurrentRowDateTime("date")));
+					writer.append(",");
 
 					Integer topPosition = rankConnection.getCurrentRowInteger("position");
 					writer.append(topPosition == null || topPosition.intValue() == 0 ? "NA" : topPosition.toString());
@@ -667,33 +673,37 @@ public class Program {
 		request.execute();
 	}
 
-	private static void expireTaskLease(Taskqueue taskQueue, Task task, String taskQueueName) throws IOException {
-		Taskqueue.Tasks.Update request = taskQueue.tasks().update(PROJECT_NAME, taskQueueName, task.getId(), 1, task);
-		request.execute();
-	}
+	// private static void expireTaskLease(Taskqueue taskQueue, Task task,
+	// String taskQueueName) throws IOException {
+	// Taskqueue.Tasks.Update request = taskQueue.tasks().update(PROJECT_NAME,
+	// taskQueueName, task.getId(), Integer.valueOf(1), task);
+	// request.execute();
+	// }
 
 	private static void loadItemsIaps() throws DataAccessException {
 
-		String getItemPropertiesQuery = "SELECT DISTINCT `internalid`, `properties` FROM `item` WHERE `properties` <> 'null' AND NOT `properties` IS NULL AND `deleted`='n' ORDER BY `id` DESC";
+		if (itemIapLookup.isEmpty()) {
+			String getItemPropertiesQuery = "SELECT DISTINCT `internalid`, `properties` FROM `item` WHERE `properties` <> 'null' AND NOT `properties` IS NULL AND `deleted`='n' ORDER BY `id` DESC";
 
-		Connection itemConnection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeItem.toString());
+			Connection itemConnection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeItem.toString());
 
-		try {
-			itemConnection.connect();
-			itemConnection.executeQuery(getItemPropertiesQuery);
+			try {
+				itemConnection.connect();
+				itemConnection.executeQuery(getItemPropertiesQuery);
 
-			String jsonProperties, itemId;
+				String jsonProperties, itemId;
 
-			while (itemConnection.fetchNextRow()) {
-				itemId = itemConnection.getCurrentRowString("internalid");
-				jsonProperties = itemConnection.getCurrentRowString("properties");
+				while (itemConnection.fetchNextRow()) {
+					itemId = itemConnection.getCurrentRowString("internalid");
+					jsonProperties = itemConnection.getCurrentRowString("properties");
 
-				itemIapLookup.put(itemId, DataTypeHelper.jsonPropertiesIapState(jsonProperties, "1", "0", "NA"));
-			}
+					itemIapLookup.put(itemId, DataTypeHelper.jsonPropertiesIapState(jsonProperties, "1", "0", "NA"));
+				}
 
-		} finally {
-			if (itemConnection != null) {
-				itemConnection.disconnect();
+			} finally {
+				if (itemConnection != null) {
+					itemConnection.disconnect();
+				}
 			}
 		}
 	}
@@ -723,17 +733,19 @@ public class Program {
 	 * 
 	 * @param country
 	 * @param store
+	 * @param category
 	 * @param listTypes
 	 * @param code
 	 * @throws DataAccessException
 	 */
-	private static void alterFeedFetchStatus(Store store, Country country, List<String> listTypes, Long code) throws DataAccessException {
+	private static void alterFeedFetchStatus(Store store, Country country, Category category, List<String> listTypes, Long code) throws DataAccessException {
 		List<FeedFetch> feeds = FeedFetchServiceProvider.provide().getGatherCodeFeedFetches(country, store, listTypes, code);
 
 		for (FeedFetch feedFetch : feeds) {
-			feedFetch.status = FeedFetchStatusType.FeedFetchStatusTypeModelled;
-
-			FeedFetchServiceProvider.provide().updateFeedFetch(feedFetch);
+			if (feedFetch.category.id.longValue() == category.id.longValue()) {
+				feedFetch.status = FeedFetchStatusType.FeedFetchStatusTypeModelled;
+				FeedFetchServiceProvider.provide().updateFeedFetch(feedFetch);
+			}
 		}
 	}
 
