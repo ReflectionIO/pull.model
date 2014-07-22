@@ -1,0 +1,3 @@
+MAILTO=william@reflection.io
+PATH=/usr/local/bin:/usr/bin:/bin:/opt/java/jdk1.7.0_55/bin
+30 * * * * java -jar /opt/pull.model/pull.model.jar true -Djava.util.logging.config.file=logging.properties >> /opt/pull.model/logs/stdouterr.log 2>&1
