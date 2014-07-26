@@ -669,7 +669,7 @@ public class Program {
 	// }
 
 	private static void deleteTask(Taskqueue taskQueue, Task task, String taskQueueName) throws IOException {
-		Taskqueue.Tasks.Delete request = taskQueue.tasks().delete(PROJECT_NAME, taskQueueName, task.getId());
+		Taskqueue.Tasks.Delete request = taskQueue.tasks().delete("s~" + PROJECT_NAME, taskQueueName, task.getId());
 		request.execute();
 	}
 
