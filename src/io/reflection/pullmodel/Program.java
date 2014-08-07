@@ -238,13 +238,11 @@ public class Program {
 							deleteTask(taskQueueApi, leasedTask, MODEL_QUEUE_NAME);
 						} catch (Throwable caught) {
 							LOGGER.error("Could not complete model task - expiring lease", caught);
-							// expireTaskLease(taskQueueApi, leasedTask,
-							// MODEL_QUEUE_NAME);
+							expireTaskLease(taskQueueApi, leasedTask, MODEL_QUEUE_NAME);
 						}
 					} else {
 						LOGGER.error("Could not complete model task");
-						// expireTaskLease(taskQueueApi, leasedTask,
-						// MODEL_QUEUE_NAME);
+						expireTaskLease(taskQueueApi, leasedTask, MODEL_QUEUE_NAME);
 					}
 				}
 			}
@@ -673,12 +671,10 @@ public class Program {
 		request.execute();
 	}
 
-	// private static void expireTaskLease(Taskqueue taskQueue, Task task,
-	// String taskQueueName) throws IOException {
-	// Taskqueue.Tasks.Update request = taskQueue.tasks().update(PROJECT_NAME,
-	// taskQueueName, task.getId(), Integer.valueOf(1), task);
-	// request.execute();
-	// }
+	private static void expireTaskLease(Taskqueue taskQueue, Task task, String taskQueueName) throws IOException {
+		Taskqueue.Tasks.Update request = taskQueue.tasks().update("s~" + PROJECT_NAME, taskQueueName, task.getId(), Integer.valueOf(1), task);
+		request.execute();
+	}
 
 	private static void loadItemsIaps() throws DataAccessException {
 
