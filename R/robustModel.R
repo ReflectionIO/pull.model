@@ -18,6 +18,10 @@ pathOutput <- as.character(args[3])
 cut.point.par  <- as.integer(args[4])
 Napps <- as.integer(args[5])
 Dt.in <- as.integer(args[6])
+bg_scaler <-  as.numeric(args[7])
+th_scaler <-  as.numeric(args[8])
+bf_scaler <-  as.numeric(args[9])
+
 
 if(!is.character(pathFree))
   stop("This should be a character variables")
@@ -122,7 +126,7 @@ Dt <- trunc(sum(exp(predict(labelled.apps.model, data.frame(grossing.position=41
 ## Compute remaining parameters
 #  From paper just before equation (9) - simple algebra
 bp <- Dt/(sum((1:cut.point)^(-ap)))
-bg <- b.ratio *bp
+bg <- b.ratio *bp/bg_scaler
 
 
 #CHECK: that the 3 variables above are valid
@@ -159,11 +163,10 @@ iap.ag <- -1/iap.estimates["b2"]
 
 iap.ap <- -1*iap.estimates["b1"]/iap.estimates["b2"]
 
-th <- iap.estimates["th"]
+th <- iap.estimates["th"]*th_scaler
+
 
 #CHECK: above 3 are valid
-
-
 
 ## crude r^2
 
@@ -188,7 +191,7 @@ af <- free.model$coefficients[c("log(top.position)")]*ag
 
 ## note, using theta (th) computed from the previous stage, following discussion with William
 # Correct as per paper
-bf <- exp(ag*free.model$coefficients[c("(Intercept)")])*bg/th
+bf <- exp(ag*free.model$coefficients[c("(Intercept)")])*bg/th/bf_scaler
 
 #CHECK above variables were okay
 
