@@ -70,7 +70,7 @@ public class DataTypeHelper {
 				JsonObject propertiesJsonObject = propertiesJsonElement.getAsJsonObject();
 				JsonElement usesIapJsonElement = propertiesJsonObject.get("usesIap");
 
-				if (usesIapJsonElement.isJsonPrimitive()) {
+				if (usesIapJsonElement != null && usesIapJsonElement.isJsonPrimitive()) {
 					if (usesIapJsonElement.getAsBoolean()) {
 						usesIap = yes;
 					} else {
