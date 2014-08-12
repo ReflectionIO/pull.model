@@ -3,6 +3,7 @@ package io.reflection.pullmodel.json.service.client;
 import java.io.IOException;
 
 import com.ning.http.client.AsyncCompletionHandler;
+import com.ning.http.client.AsyncHttpClient;
 import com.ning.http.client.ListenableFuture;
 import com.ning.http.client.RequestBuilder;
 import com.spacehopperstudios.utility.JsonUtils;
@@ -19,6 +20,7 @@ public class JsonService {
 	}
 
 	protected String url;
+	protected AsyncHttpClient client = new AsyncHttpClient();
 
 	public String getUrl() {
 		return url;
@@ -47,7 +49,7 @@ public class JsonService {
 		builder.setHeader("Content-Type", "application/x-www-form-urlencoded");
 		builder.setBody(requestData.getBytes());
 
-        return AsyncClient.get().executeRequest(builder.build(), callback);
+        return client.executeRequest(builder.build(), callback);
 	}
 
 	protected <T extends Response> void onCallStart(JsonService origin, String callName, Request input, ListenableFuture<T> requestHandle) {
@@ -57,5 +59,14 @@ public class JsonService {
 	}
 
 	protected void onCallFailure(JsonService origin, String callName, Request input, Throwable caught) {
+	}
+	
+	/* (non-Javadoc)
+	 * @see java.lang.Object#finalize()
+	 */
+	@Override
+	protected void finalize() throws Throwable {
+	    client.close();
+	    super.finalize();
 	}
 }
