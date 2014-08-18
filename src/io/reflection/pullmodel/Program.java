@@ -146,13 +146,13 @@ public class Program {
 
 		if (!isComputeEngine.booleanValue()) {
 			GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY,
-					new InputStreamReader(Program.class.getResourceAsStream("config/secret.json")));
+			        new InputStreamReader(Program.class.getResourceAsStream("config/secret.json")));
 			if ((clientSecrets.getDetails().getClientId().startsWith("Enter")) || (clientSecrets.getDetails().getClientSecret().startsWith("Enter "))) {
 				LOGGER.error("Log file not found!");
 				System.exit(1);
 			}
 			GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(httpTransport, JSON_FACTORY, clientSecrets,
-					Collections.singleton("https://www.googleapis.com/auth/taskqueue")).setDataStoreFactory(dataStoreFactory).build();
+			        Collections.singleton("https://www.googleapis.com/auth/taskqueue")).setDataStoreFactory(dataStoreFactory).build();
 
 			c = new AuthorizationCodeInstalledApp(flow, new LocalServerReceiver()).authorize("user");
 		} else {
@@ -170,11 +170,11 @@ public class Program {
 
 		LOGGER.debug("Initialising task queue api");
 		Taskqueue taskQueueApi = new Taskqueue.Builder(httpTransport, JSON_FACTORY, credential).setApplicationName(APPLICATION_NAME)
-				.setTaskqueueRequestInitializer(new TaskqueueRequestInitializer() {
-					public void initializeTaskqueueRequest(TaskqueueRequest<?> request) {
-						request.setPrettyPrint(Boolean.valueOf(true));
-					}
-				}).build();
+		        .setTaskqueueRequestInitializer(new TaskqueueRequestInitializer() {
+			        public void initializeTaskqueueRequest(TaskqueueRequest<?> request) {
+				        request.setPrettyPrint(Boolean.valueOf(true));
+			        }
+		        }).build();
 
 		// dummyInsert(taskQueueApi);
 
@@ -250,7 +250,7 @@ public class Program {
 	}
 
 	private static void callApiTriggerPredict(final Store store, final Country country, final String type, final List<String> listTypes, final Long code)
-			throws InterruptedException, ExecutionException {
+	        throws InterruptedException, ExecutionException {
 
 		if (session == null) {
 			callApiLogin(store, country, type, listTypes, code);
@@ -273,12 +273,12 @@ public class Program {
 				public void onSuccess(TriggerPredictResponse output) {
 					if (output.status == StatusType.StatusTypeSuccess) {
 						LOGGER.info(String.format("Triggered predict for store [%s], country [%s], type [%s], code [%d] ", store.a3Code, country.a2Code, type,
-								code.longValue()));
+						        code.longValue()));
 					} else {
 						if (output.error != null
-								&& output.error.code != null
-								&& (ApiError.SessionNoLookup.isCode(output.error.code) || ApiError.SessionNull.isCode(output.error.code) || ApiError.SessionNotFound
-										.isCode(output.error.code))) {
+						        && output.error.code != null
+						        && (ApiError.SessionNoLookup.isCode(output.error.code) || ApiError.SessionNull.isCode(output.error.code) || ApiError.SessionNotFound
+						                .isCode(output.error.code))) {
 							LOGGER.info("There is an issue with the session, resetting and trigger again");
 
 							session = null;
@@ -348,8 +348,8 @@ public class Program {
 						}
 					} else {
 						throw new RuntimeException(String.format("Could not login (%s - %s)",
-								output.error.code == null ? "no error code" : output.error.code.toString(), output.error.message == null ? "no error message"
-										: output.error.message));
+						        output.error.code == null ? "no error code" : output.error.code.toString(), output.error.message == null ? "no error message"
+						                : output.error.message));
 					}
 				}
 
@@ -454,7 +454,7 @@ public class Program {
 	 * @throws DataAccessException
 	 */
 	private static boolean executeModelTask(Task task, Store store, Country country, String type, List<String> listTypes, Category category, Long code)
-			throws IOException, URISyntaxException, DataAccessException {
+	        throws IOException, URISyntaxException, DataAccessException {
 
 		boolean success = false;
 
@@ -495,7 +495,7 @@ public class Program {
 		} catch (Exception e) {
 			LOGGER.error("Error running script", e);
 			LOGGER.error(String.format("Error occured calculating values with parameters store [%s], country [%s], type [%s], [%s]", store, country, type,
-					code == null ? "null" : code.toString()), e);
+			        code == null ? "null" : code.toString()), e);
 		}
 
 		return success;
@@ -522,7 +522,7 @@ public class Program {
 	// private static String createInputFile(Store store, Country country,
 	// List<String> listTypes, Date date, String priceQuery, String fileRef)
 	private static String createInputFile(Store store, Country country, Category category, String type, List<String> listTypes, Long code, String priceQuery,
-			String fileRef) throws IOException, DataAccessException {
+	        String fileRef) throws IOException, DataAccessException {
 		String inputFilePath = contextBasedName(fileRef, store.a3Code, country.a2Code, type, code.toString()) + ".csv";
 
 		boolean createFile = false;
@@ -559,8 +559,8 @@ public class Program {
 			// store.a3Code, priceQuery, typesQueryPart, date.getTime() / 1000);
 
 			String query = String
-					.format("SELECT `r`.`itemid`, `r`.`date`, `r`.`position`,`r`.`grossingposition`, `r`.`price` FROM `rank` AS `r` WHERE `r`.`country`='%s' AND `r`.`categoryid`=%d AND `r`.`source`='%s' AND %s AND `r`.%s AND `code2`<=%d",
-							country.a2Code, category.id.longValue(), store.a3Code, priceQuery, typesQueryPart, code.longValue());
+			        .format("SELECT `r`.`itemid`, `r`.`date`, `r`.`position`,`r`.`grossingposition`, `r`.`price` FROM `rank` AS `r` WHERE `r`.`country`='%s' AND `r`.`categoryid`=%d AND `r`.`source`='%s' AND %s AND `r`.%s AND `code2`<=%d",
+			                country.a2Code, category.id.longValue(), store.a3Code, priceQuery, typesQueryPart, code.longValue());
 
 			Connection rankConnection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeRank.toString());
 
@@ -672,8 +672,8 @@ public class Program {
 	}
 
 	private static void expireTaskLease(Taskqueue taskQueue, Task task, String taskQueueName) throws IOException {
-		Taskqueue.Tasks.Update request = taskQueue.tasks().update("s~" + PROJECT_NAME, taskQueueName, task.getId(), Integer.valueOf(1), task);
-		request.execute();
+		// Taskqueue.Tasks.Update request = taskQueue.tasks().update("s~" + PROJECT_NAME, taskQueueName, task.getId(), Integer.valueOf(1), task);
+		// request.execute();
 	}
 
 	private static void loadItemsIaps() throws DataAccessException {
