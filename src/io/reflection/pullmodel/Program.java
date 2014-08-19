@@ -46,6 +46,7 @@ import java.net.URISyntaxException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -92,6 +93,8 @@ public class Program {
 	private static final int DEFAULT_LEASE_DURATION_SECONDS = 3600;
 	private static final int DEFAULT_TASKS_TO_LEASE = 1;
 
+	private static final long DEFAULT_ITEM_REFRESH = 12 * 60 * 60 * 1000;
+
 	private static int leaseCount = DEFAULT_TASKS_TO_LEASE;
 	private static int leaseSeconds = DEFAULT_LEASE_DURATION_SECONDS;
 	private static Boolean isComputeEngine = null;
@@ -108,6 +111,7 @@ public class Program {
 	private static final JsonFactory JSON_FACTORY = JacksonFactory.getDefaultInstance();
 
 	private static Map<String, String> itemIapLookup = new HashMap<String, String>();
+	private static Date itemIapLookupLastUpdated;
 
 	// private static final String TRUNCATED_OUTPUT_PATH =
 	// "outputtruncated.csv";
@@ -188,13 +192,15 @@ public class Program {
 		LOGGER.info("pulling message from the model");
 		while (true) {
 			Tasks tasks = getLeasedTasks(taskQueueApi, MODEL_QUEUE_NAME);
+
 			if (tasks == null || tasks.getItems() == null || tasks.getItems().size() == 0) {
 				LOGGER.info("No tasks to lease exiting");
 				break;
 			} else {
-				loadItemsIaps();
-
 				for (Task leasedTask : tasks.getItems()) {
+					LOGGER.debug("Load iaps if enough time has passed");
+					loadItemsIaps();
+
 					LOGGER.info("run R script");
 					Map<String, String> mappedParams = new HashMap<String, String>();
 
@@ -356,8 +362,7 @@ public class Program {
 				@Override
 				public void onFailure(Throwable caught) {
 					LOGGER.error("An error occured while logging in", caught);
-					// FIXME: this exception is not caught because it is not on
-					// the same thread
+					// FIXME: this exception is not caught because it is not on the same thread
 					throw new RuntimeException(caught);
 				}
 			}).get();
@@ -672,13 +677,28 @@ public class Program {
 	}
 
 	private static void expireTaskLease(Taskqueue taskQueue, Task task, String taskQueueName) throws IOException {
-		// Taskqueue.Tasks.Update request = taskQueue.tasks().update("s~" + PROJECT_NAME, taskQueueName, task.getId(), Integer.valueOf(1), task);
-		// request.execute();
+		// this is a workaround for an issue with the task queue api
+		task.setQueueName(taskQueueName);
+		Taskqueue.Tasks.Update request = taskQueue.tasks().update("s~" + PROJECT_NAME, taskQueueName, task.getId(), Integer.valueOf(1), task);
+		request.execute();
+	}
+
+	private static boolean expiredLookup() {
+		boolean expiredLookup = false;
+
+		if (itemIapLookupLastUpdated == null || (new Date()).getTime() - itemIapLookupLastUpdated.getTime() > DEFAULT_ITEM_REFRESH) {
+			expiredLookup = true;
+		}
+
+		return expiredLookup;
+	}
+
+	private static boolean overwriteItem(String existingIapState, String iapState) {
+		return existingIapState == null || (!existingIapState.equals(iapState) && !"NA".equals(iapState));
 	}
 
 	private static void loadItemsIaps() throws DataAccessException {
-
-		if (itemIapLookup.isEmpty()) {
+		if (itemIapLookup.isEmpty() || expiredLookup()) {
 			String getItemPropertiesQuery = "SELECT DISTINCT `internalid`, `properties` FROM `item` WHERE `properties` <> 'null' AND NOT `properties` IS NULL AND `deleted`='n' ORDER BY `id` DESC";
 
 			Connection itemConnection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeItem.toString());
@@ -693,9 +713,14 @@ public class Program {
 					itemId = itemConnection.getCurrentRowString("internalid");
 					jsonProperties = itemConnection.getCurrentRowString("properties");
 
-					itemIapLookup.put(itemId, DataTypeHelper.jsonPropertiesIapState(jsonProperties, "1", "0", "NA"));
+					String iapState = DataTypeHelper.jsonPropertiesIapState(jsonProperties, "1", "0", "NA");
+
+					if (overwriteItem(itemIapLookup.get(itemId), iapState)) {
+						itemIapLookup.put(itemId, iapState);
+					}
 				}
 
+				itemIapLookupLastUpdated = new Date();
 			} finally {
 				if (itemConnection != null) {
 					itemConnection.disconnect();
