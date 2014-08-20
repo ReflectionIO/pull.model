@@ -90,10 +90,11 @@ public class Program {
 	private static String MODEL_QUEUE_NAME = "model";
 	// private static String PREDICT_QUEUE_NAME = "predict";
 
-	private static final int DEFAULT_LEASE_DURATION_SECONDS = 3600;
+	private static final int DEFAULT_LEASE_DURATION_SECONDS = 60 * 60;
 	private static final int DEFAULT_TASKS_TO_LEASE = 1;
 
-	private static final long DEFAULT_ITEM_REFRESH = 12 * 60 * 60 * 1000;
+	private static final long DEFAULT_ITEM_REFRESH_MILLIS = 12 * 60 * 60 * 1000;
+	private static final long DEFAULT_SLEEP_MILLIS = 5 * 60 * 1000;
 
 	private static int leaseCount = DEFAULT_TASKS_TO_LEASE;
 	private static int leaseSeconds = DEFAULT_LEASE_DURATION_SECONDS;
@@ -194,11 +195,13 @@ public class Program {
 			Tasks tasks = getLeasedTasks(taskQueueApi, MODEL_QUEUE_NAME);
 
 			if (tasks == null || tasks.getItems() == null || tasks.getItems().size() == 0) {
-				LOGGER.info("No tasks to lease exiting");
-				break;
+				// LOGGER.info("No tasks to lease exiting");
+				// break;
+
+				LOGGER.info("No tasks to lease sleeping for a while");
+				Thread.sleep(DEFAULT_SLEEP_MILLIS);
 			} else {
 				for (Task leasedTask : tasks.getItems()) {
-					LOGGER.debug("Load iaps if enough time has passed");
 					loadItemsIaps();
 
 					LOGGER.info("run R script");
@@ -686,7 +689,7 @@ public class Program {
 	private static boolean expiredLookup() {
 		boolean expiredLookup = false;
 
-		if (itemIapLookupLastUpdated == null || (new Date()).getTime() - itemIapLookupLastUpdated.getTime() > DEFAULT_ITEM_REFRESH) {
+		if (itemIapLookupLastUpdated == null || (new Date()).getTime() - itemIapLookupLastUpdated.getTime() > DEFAULT_ITEM_REFRESH_MILLIS) {
 			expiredLookup = true;
 		}
 
@@ -698,6 +701,8 @@ public class Program {
 	}
 
 	private static void loadItemsIaps() throws DataAccessException {
+		LOGGER.debug("Load iaps if enough time has passed");
+		
 		if (itemIapLookup.isEmpty() || expiredLookup()) {
 			String getItemPropertiesQuery = "SELECT DISTINCT `internalid`, `properties` FROM `item` WHERE `properties` <> 'null' AND NOT `properties` IS NULL AND `deleted`='n' ORDER BY `id` DESC";
 
