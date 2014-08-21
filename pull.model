@@ -1,0 +1,20 @@
+#!/bin/bash
+# pull.model
+#
+# description: pull items from the model queue and run the r script to calibrate on data 
+
+PULL_MODEL_PATH=/opt/pull.model
+
+case $1 in
+    start)
+        /bin/bash $PULL_MODEL_PATH/pull.model-start.sh
+    ;;
+    stop)
+        /bin/bash $PULL_MODEL_PATH/pull.model-stop.sh
+    ;;
+    restart)
+        /bin/bash $PULL_MODEL_PATH/pull.model-stop.sh
+        /bin/bash $PULL_MODEL_PATH/pull.model-start.sh
+    ;;
+esac
+exit 0
