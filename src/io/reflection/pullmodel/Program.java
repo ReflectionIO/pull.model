@@ -484,7 +484,7 @@ public class Program {
 
 			// runRScriptWithParameters("model.R", freeFilePath,
 			// paidFilePath, TRUNCATED_OUTPUT_PATH, "400", "40", "500000");
-			runRScriptWithParameters("robustModel.R", freeFilePath, paidFilePath, outputPath, "200", "40", "500000", "1e4", "1e3", "270");
+			runRScriptWithParameters("robustModel.R", freeFilePath, paidFilePath, outputPath, "200", "40", "500000", "1e5", "1e9", "1e2");
 
 			persistValues(outputPath, store, country, modeller.getForm(type), code);
 

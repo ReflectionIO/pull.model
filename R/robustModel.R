@@ -48,6 +48,7 @@ if(!file.exists(pathPaid))
 paid.raw <- read.csv(pathPaid,skip=0,as.is=T)
 
 
+
 free.raw$usesiap = as.numeric(! free.raw$usesiap == "")
 paid.raw$usesiap = as.numeric(! paid.raw$usesiap == "")
 
@@ -113,7 +114,6 @@ my.labelled.df <- cbind(apps.with.info.df, downloads.info)
 ## This is the end of the proxy section 
 # - the developer data will replace the above
 
-
 #This uses developer data to estimate the total downloads assuming 
 # the following relationship
 labelled.apps.model <- lm(log(downloads.info) ~ log(grossing.position), data = my.labelled.df)
@@ -123,75 +123,74 @@ labelled.apps.model <- lm(log(downloads.info) ~ log(grossing.position), data = m
 ## compute aggregated Downloads Dt                                                               
 Dt <- trunc(sum(exp(predict(labelled.apps.model, data.frame(grossing.position=41:cut.point))))) + sum(downloads.info)
 
+
 ## Compute remaining parameters
 #  From paper just before equation (9) - simple algebra
 bp <- Dt/(sum((1:cut.point)^(-ap)))
-bg <- b.ratio *bp/bg_scaler
+bg <- b.ratio *bp / bg_scaler
 
 
 #CHECK: that the 3 variables above are valid
-
-
-
-
 free.indx  <- !is.na(free.raw$top.position) & !is.na(free.raw$grossing.position) & !is.na(free.raw$usesiap)
 
 my.iap.df <- rbind(basic.df, free.raw[free.indx,])
 
 my.iap.df$iap.ind <- as.numeric(my.iap.df$usesiap)
 
+
 my.iap.df$iap.ind[is.na(my.iap.df$iap.ind)] <-  0
+# 
+ my.start <- list(b0= 4, b1= 0.20, b2= 0.30 ,th= 0.20)
+# 
+#  Par. =    4.19607   0.258023   0.156256  1.17119e-08
+ iap.model <- try(nls(log(grossing.position) ~ b0 + b1*log(top.position) + b2*log(price + th*as.numeric(iap.ind)), data=my.iap.df, start=my.start))
+# 
+# 
+ if (class(iap.model) == "try-error") {
+#   # Ignore warnings while processing errors
+   print("Some model error with nls iap trying LM")
+   iap.model <- nlsLM(log(grossing.position) ~ b0 + b1*log(top.position) + b2*log(price + th*as.numeric(iap.ind)), data=my.iap.df, start=my.start);
+ } else{print("standard nls worked");}
+# 
+ iap.estimates <- summary(iap.model)$parameters[,1]
+# 
+ names(iap.estimates) <- row.names(summary(iap.model)$parameters)
+# 
+# 
+ iap.ag <- 1/iap.estimates["b2"]/10
+# 
+ iap.ap <- 1*iap.estimates["b1"]/iap.estimates["b2"]/10
+# 
+ th <- iap.estimates["th"]*th_scaler
+# 
+# 
+# #CHECK: above 3 are valid
+# 
+# ## crude r^2
+# 
 
-my.start <- list(b0=0.1, b1= 0.2, b2=0.2 ,th=0.3)
+iap.r2 <- cor(log(my.iap.df$grossing.position), fitted.values(iap.model))^2
 
-
-iap.model <- try(nls(log(grossing.position) ~ b0 + b1*log(top.position) + b2*log(price + th*as.numeric(iap.ind)), data=my.iap.df, start=my.start), silent=TRUE)
-
-
-if (class(iap.model) == "try-error") {
-  # Ignore warnings while processing errors
-  print("Some model error with nls iap trying LM")
-  iap.model <- nlsLM(log(grossing.position) ~ b0 + b1*log(top.position) + b2*log(price + th*as.numeric(iap.ind)), data=my.iap.df, start=my.start);
-} else{print("standard nls worked");}
-
-iap.estimates <- summary(iap.model)$parameters[,1]
-
-names(iap.estimates) <- row.names(summary(iap.model)$parameters)
-
-
-iap.ag <- -1/iap.estimates["b2"]
-
-iap.ap <- -1*iap.estimates["b1"]/iap.estimates["b2"]
-
-th <- iap.estimates["th"]*th_scaler
-
-
-#CHECK: above 3 are valid
-
-## crude r^2
-
-iap.r2 <- cor(log(my.iap.df$grossing.position),fitted.values(iap.model))^2
-
-
-## Now, free apps
-
-free.ind <- !is.na(free.raw$top.position) & !is.na(free.raw$grossing.position)
-
-my.free.df <- free.raw[free.ind,]
-
-#CHECK: above df is free of nas
-
-free.model <- lmrob(log(grossing.position)~log(top.position),data=my.free.df) 
-
-#CHECK above model ran okay
-
-# Correct as per paper
-af <- free.model$coefficients[c("log(top.position)")]*ag
-
-
-## note, using theta (th) computed from the previous stage, following discussion with William
-# Correct as per paper
-bf <- exp(ag*free.model$coefficients[c("(Intercept)")])*bg/th/bf_scaler
+ 
+# ## Now, free apps
+# 
+ free.ind <- !is.na(free.raw$top.position) & !is.na(free.raw$grossing.position)
+# 
+ my.free.df <- free.raw[free.ind,]
+# 
+# #CHECK: above df is free of nas
+# 
+ free.model <- lmrob(log(grossing.position) ~ log(top.position), data=my.free.df) 
+# 
+# #CHECK above model ran okay
+# 
+# # Correct as per paper
+ af <- free.model$coefficients[c("log(top.position)")]*ag
+# 
+# 
+# ## note, using theta (th) computed from the previous stage, following discussion with William
+# # Correct as per paper
+ bf <- exp(ag*free.model$coefficients[c("(Intercept)")])*bg/th/bf_scaler
 
 #CHECK above variables were okay
 
