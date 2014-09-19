@@ -12,6 +12,7 @@ import io.reflection.app.repackaged.scphopr.service.database.IDatabaseService;
 
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.util.Map.Entry;
 import java.util.Properties;
 
 import org.apache.log4j.xml.DOMConfigurator;
@@ -24,14 +25,13 @@ import org.slf4j.bridge.SLF4JBridgeHandler;
  */
 public class SystemConfigurator {
 
-
 	private static SystemConfigurator one;
 
 	private static final String LOGGER_CONFIG_PATH = "./Logger.xml";
 	private static final Logger LOGGER = LoggerFactory.getLogger(SystemConfigurator.class);
-	
+
 	private static final String CONFIG_FILE_PATH_KEY = "io.reflection.pullmodel.config.file";
-	
+
 	public static final String DATABASE_SERVER_DEFAULT = "173.194.104.108";
 	public static final String DATABASE_CATALOGUE_DEFAULT = "rio";
 	public static final String DATABASE_USERNAME_DEFAULT = "rio_app_user";
@@ -41,16 +41,16 @@ public class SystemConfigurator {
 
 	public static final String ADMIN_SERVICE_USERNAME_KEY = "service.admin.username";
 	private static final String ADMIN_SERVICE_USERNAME_DEFAULT = "hello@reflection.io";
-	
+
 	public static final String ADMIN_SERVICE_PASSWORD_KEY = "service.admin.password";
 	private static final String ADMIN_SERVICE_PASSWORD_DEFAULT = "clattered83-eurobond";
 
 	public static final String CORE_SERVICE_URL_KEY = "core.service.url";
 	private static final String CORE_SERVICE_URL_DEFAULT = "http://www.reflection.io/api/core";
-	
+
 	public static final String ADMIN_SERVICE_URL_KEY = "admin.service.url";
 	private static final String ADMIN_SERVICE_URL_DEFAULT = "http://www.reflection.io/api/admin";
-	
+
 	public static final String CLIENT_API_TOKEN_KEY = "client.api.token";
 	private static final String CLIENT_API_TOKEN_DEFAULT = "931ecd7a-fe45-11e3-8ba6-7054d251af02";
 
@@ -95,7 +95,9 @@ public class SystemConfigurator {
 			try {
 				properties.load(new FileInputStream(configFile));
 
-				System.setProperties(properties);
+				for (Entry<Object, Object> entry : properties.entrySet()) {
+					System.setProperty(entry.getKey().toString(), entry.getValue().toString());
+				}
 
 			} catch (IOException ex) {
 

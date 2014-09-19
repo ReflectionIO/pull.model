@@ -20,21 +20,27 @@ public class SqlQueryHelper {
 	 * @param after
 	 * @return
 	 */
-	public static String beforeAfterQuery(Date before, Date after) {
+	public static String beforeAfterQuery(String field, Date before, Date after) {
 		StringBuffer buffer = new StringBuffer();
 
 		if (before != null && after != null) {
-			buffer.append("(`date` BETWEEN FROM_UNIXTIME(");
+			buffer.append("(");
+			buffer.append(field);
+			buffer.append(" BETWEEN FROM_UNIXTIME(");
 			buffer.append(after.getTime() / 1000);
 			buffer.append(") AND FROM_UNIXTIME(");
 			buffer.append(before.getTime() / 1000);
 			buffer.append(")) AND ");
 		} else if (after != null && before == null) {
-			buffer.append("`date`>=FROM_UNIXTIME(");
+			buffer.append("(");
+			buffer.append(field);
+			buffer.append(">=FROM_UNIXTIME(");
 			buffer.append(after.getTime() / 1000);
 			buffer.append(") AND ");
 		} else if (before != null && after == null) {
-			buffer.append("`date`<FROM_UNIXTIME(");
+			buffer.append("(");
+			buffer.append(field);
+			buffer.append("<FROM_UNIXTIME(");
 			buffer.append(before.getTime() / 1000);
 			buffer.append(") AND ");
 		}
