@@ -38,6 +38,7 @@ import io.reflection.pullmodel.json.service.client.JsonService;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -76,6 +77,8 @@ import com.google.api.services.taskqueue.model.Tasks;
 import com.spacehopperstudios.utility.StringUtils;
 import com.willshex.gson.json.service.shared.StatusType;
 
+import static io.reflection.pullmodel.SystemConfigurator.*;
+
 /**
  * @author billy1380
  * 
@@ -83,11 +86,6 @@ import com.willshex.gson.json.service.shared.StatusType;
 public class Program {
 	private static final Logger LOGGER = LoggerFactory.getLogger(Program.class);
 
-	private static final String APPLICATION_NAME = "storedatacollector";
-
-	private static final String PROJECT_NAME = "storedatacollector";
-
-	private static String MODEL_QUEUE_NAME = "model";
 	// private static String PREDICT_QUEUE_NAME = "predict";
 
 	private static final int DEFAULT_LEASE_DURATION_SECONDS = 60 * 60;
@@ -104,7 +102,7 @@ public class Program {
 	private static int LEASE_SECONDS_ARG_INDEX = 1;
 	private static int LEASE_COUNT_ARG_INDEX = 2;
 
-	private static final File DATA_STORE_DIR = new File(System.getProperty("user.home"), ".store/pull_model_config");
+	private static final File DATA_STORE_DIR = new File(System.getProperty("user.home"), System.getProperty(DATA_STORE_NAME_KEY));
 
 	private static FileDataStoreFactory dataStoreFactory;
 	private static HttpTransport httpTransport;
@@ -117,6 +115,7 @@ public class Program {
 	// private static final String TRUNCATED_OUTPUT_PATH =
 	// "outputtruncated.csv";
 	private static final String ROBUST_OUTPUT_PATH = "outputrobust.csv";
+	private static final String SIMPLE_OUTPUT_PATH = "outputsimple.csv";
 
 	private static final String FILE_SPARATOR = System.getProperty("file.separator");
 
@@ -135,6 +134,9 @@ public class Program {
 	private static final String TH_OUTPUT = "th";
 	private static final String BF_OUTPUT = "bf";
 
+	private static final String A_OUTPUT = "a";
+	private static final String B_OUTPUT = "b";
+
 	private static Session session = null;
 
 	public static void main(String[] args) throws Exception {
@@ -151,13 +153,13 @@ public class Program {
 
 		if (!isComputeEngine.booleanValue()) {
 			GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY,
-			        new InputStreamReader(Program.class.getResourceAsStream("config/secret.json")));
+					new InputStreamReader(new FileInputStream(System.getProperty(SECRET_FILE_NAME_KEY))));
 			if ((clientSecrets.getDetails().getClientId().startsWith("Enter")) || (clientSecrets.getDetails().getClientSecret().startsWith("Enter "))) {
 				LOGGER.error("Log file not found!");
 				System.exit(1);
 			}
 			GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(httpTransport, JSON_FACTORY, clientSecrets,
-			        Collections.singleton("https://www.googleapis.com/auth/taskqueue")).setDataStoreFactory(dataStoreFactory).build();
+					Collections.singleton("https://www.googleapis.com/auth/taskqueue")).setDataStoreFactory(dataStoreFactory).build();
 
 			c = new AuthorizationCodeInstalledApp(flow, new LocalServerReceiver()).authorize("user");
 		} else {
@@ -174,17 +176,17 @@ public class Program {
 		Credential credential = authorize();
 
 		LOGGER.debug("Initialising task queue api");
-		Taskqueue taskQueueApi = new Taskqueue.Builder(httpTransport, JSON_FACTORY, credential).setApplicationName(APPLICATION_NAME)
-		        .setTaskqueueRequestInitializer(new TaskqueueRequestInitializer() {
-			        public void initializeTaskqueueRequest(TaskqueueRequest<?> request) {
-				        request.setPrettyPrint(Boolean.valueOf(true));
-			        }
-		        }).build();
+		Taskqueue taskQueueApi = new Taskqueue.Builder(httpTransport, JSON_FACTORY, credential).setApplicationName(System.getProperty(APPLICATION_NAME_KEY))
+				.setTaskqueueRequestInitializer(new TaskqueueRequestInitializer() {
+					public void initializeTaskqueueRequest(TaskqueueRequest<?> request) {
+						request.setPrettyPrint(Boolean.valueOf(true));
+					}
+				}).build();
 
 		// dummyInsert(taskQueueApi);
 
 		LOGGER.debug("Getting model queue");
-		TaskQueue modelQueue = getQueue(taskQueueApi, MODEL_QUEUE_NAME);
+		TaskQueue modelQueue = getQueue(taskQueueApi, System.getProperty(MODEL_QUEUE_NAME_KEY));
 		LOGGER.error(modelQueue == null ? "modelqueue coun not be obtained" : String.format("modelqueue obtained at [%s]", modelQueue.toString()));
 
 		// TaskQueue predictQueue = getQueue(taskQueueApi, PREDICT_QUEUE_NAME);
@@ -192,7 +194,7 @@ public class Program {
 
 		LOGGER.info("pulling message from the model");
 		while (true) {
-			Tasks tasks = getLeasedTasks(taskQueueApi, MODEL_QUEUE_NAME);
+			Tasks tasks = getLeasedTasks(taskQueueApi, System.getProperty(MODEL_QUEUE_NAME_KEY));
 
 			if (tasks == null || tasks.getItems() == null || tasks.getItems().size() == 0) {
 				// LOGGER.info("No tasks to lease exiting");
@@ -222,6 +224,8 @@ public class Program {
 
 					String store = mappedParams.get("store");
 					String country = mappedParams.get("country");
+					String categoryIdParam = mappedParams.get("categoryid");
+					Long categoryId = categoryIdParam == null ? null : Long.valueOf(categoryIdParam);
 					String type = mappedParams.get("type");
 					String codeParam = mappedParams.get("code");
 					Long code = codeParam == null ? null : Long.valueOf(codeParam);
@@ -232,37 +236,44 @@ public class Program {
 					Store s = new Store();
 					s.a3Code = store;
 
-					Category category = CategoryServiceProvider.provide().getAllCategory(s);
+					Category category = null;
+
+					if (categoryId == null) {
+						category = CategoryServiceProvider.provide().getAllCategory(s);
+					} else {
+						category = new Category();
+						category.id = categoryId;
+					}
 
 					Collector collector = CollectorFactory.getCollectorForStore(store);
 					List<String> listTypes = new ArrayList<String>();
 					listTypes.addAll(collector.getCounterpartTypes(type));
 					listTypes.add(type);
 
-					if (executeModelTask(leasedTask, s, c, type, listTypes, category, code)) {
+					if (executeModelTask(leasedTask, s, c, category, type, listTypes, code)) {
 						try {
-							callApiTriggerPredict(s, c, type, listTypes, code);
+							callApiTriggerPredict(s, c, category, type, listTypes, code);
 
 							LOGGER.info("Deleting successfully complete model task");
-							deleteTask(taskQueueApi, leasedTask, MODEL_QUEUE_NAME);
+							deleteTask(taskQueueApi, leasedTask, System.getProperty(MODEL_QUEUE_NAME_KEY));
 						} catch (Throwable caught) {
 							LOGGER.error("Could not complete model task - expiring lease", caught);
-							expireTaskLease(taskQueueApi, leasedTask, MODEL_QUEUE_NAME);
+							expireTaskLease(taskQueueApi, leasedTask, System.getProperty(MODEL_QUEUE_NAME_KEY));
 						}
 					} else {
 						LOGGER.error("Could not complete model task");
-						expireTaskLease(taskQueueApi, leasedTask, MODEL_QUEUE_NAME);
+						expireTaskLease(taskQueueApi, leasedTask, System.getProperty(MODEL_QUEUE_NAME_KEY));
 					}
 				}
 			}
 		}
 	}
 
-	private static void callApiTriggerPredict(final Store store, final Country country, final String type, final List<String> listTypes, final Long code)
-	        throws InterruptedException, ExecutionException {
+	private static void callApiTriggerPredict(final Store store, final Country country, final Category category, final String type,
+			final List<String> listTypes, final Long code) throws InterruptedException, ExecutionException {
 
 		if (session == null) {
-			callApiLogin(store, country, type, listTypes, code);
+			callApiLogin(store, country, category, type, listTypes, code);
 		} else {
 
 			AdminService admin = new AdminService();
@@ -275,6 +286,7 @@ public class Program {
 			input.country = country;
 			input.store = store;
 			input.listTypes = listTypes;
+			input.category = category;
 
 			admin.triggerPredict(input, new JsonService.AsyncCallback<TriggerPredictResponse>() {
 
@@ -282,18 +294,18 @@ public class Program {
 				public void onSuccess(TriggerPredictResponse output) {
 					if (output.status == StatusType.StatusTypeSuccess) {
 						LOGGER.info(String.format("Triggered predict for store [%s], country [%s], type [%s], code [%d] ", store.a3Code, country.a2Code, type,
-						        code.longValue()));
+								code.longValue()));
 					} else {
 						if (output.error != null
-						        && output.error.code != null
-						        && (ApiError.SessionNoLookup.isCode(output.error.code) || ApiError.SessionNull.isCode(output.error.code) || ApiError.SessionNotFound
-						                .isCode(output.error.code))) {
+								&& output.error.code != null
+								&& (ApiError.SessionNoLookup.isCode(output.error.code) || ApiError.SessionNull.isCode(output.error.code) || ApiError.SessionNotFound
+										.isCode(output.error.code))) {
 							LOGGER.info("There is an issue with the session, resetting and trigger again");
 
 							session = null;
 
 							try {
-								callApiTriggerPredict(store, country, type, listTypes, code);
+								callApiTriggerPredict(store, country, category, type, listTypes, code);
 							} catch (Throwable caught) {
 								LOGGER.error("An error occured while calling Api Trigger predict", caught);
 								throw new RuntimeException(caught);
@@ -325,7 +337,8 @@ public class Program {
 		return apiSession;
 	}
 
-	private static void callApiLogin(final Store store, final Country country, final String type, final List<String> listType, final Long code) {
+	private static void callApiLogin(final Store store, final Country country, final Category category, final String type, final List<String> listType,
+			final Long code) {
 		CoreService core = new CoreService();
 		core.setUrl(System.getProperty(SystemConfigurator.CORE_SERVICE_URL_KEY));
 
@@ -347,7 +360,7 @@ public class Program {
 							session = output.session;
 
 							try {
-								callApiTriggerPredict(store, country, type, listType, code);
+								callApiTriggerPredict(store, country, category, type, listType, code);
 							} catch (Throwable caught) {
 								LOGGER.error("An error occured while calling Api Trigger predict", caught);
 								throw new RuntimeException(caught);
@@ -357,8 +370,8 @@ public class Program {
 						}
 					} else {
 						throw new RuntimeException(String.format("Could not login (%s - %s)",
-						        output.error.code == null ? "no error code" : output.error.code.toString(), output.error.message == null ? "no error message"
-						                : output.error.message));
+								output.error.code == null ? "no error code" : output.error.code.toString(), output.error.message == null ? "no error message"
+										: output.error.message));
 					}
 				}
 
@@ -444,13 +457,14 @@ public class Program {
 	}
 
 	private static TaskQueue getQueue(Taskqueue taskQueue, String taskQueueName) throws IOException {
-		Taskqueue.Taskqueues.Get request = taskQueue.taskqueues().get(PROJECT_NAME, taskQueueName);
+		Taskqueue.Taskqueues.Get request = taskQueue.taskqueues().get(System.getProperty(PROJECT_NAME_KEY), taskQueueName);
 		request.setGetStats(Boolean.valueOf(true));
 		return (TaskQueue) request.execute();
 	}
 
 	private static Tasks getLeasedTasks(Taskqueue taskQueue, String taskQueueName) throws IOException {
-		Taskqueue.Tasks.Lease leaseRequest = taskQueue.tasks().lease(PROJECT_NAME, taskQueueName, Integer.valueOf(leaseCount), Integer.valueOf(leaseSeconds));
+		Taskqueue.Tasks.Lease leaseRequest = taskQueue.tasks().lease(System.getProperty(PROJECT_NAME_KEY), taskQueueName, Integer.valueOf(leaseCount),
+				Integer.valueOf(leaseSeconds));
 		return (Tasks) leaseRequest.execute();
 	}
 
@@ -461,8 +475,8 @@ public class Program {
 	 * @throws URISyntaxException
 	 * @throws DataAccessException
 	 */
-	private static boolean executeModelTask(Task task, Store store, Country country, String type, List<String> listTypes, Category category, Long code)
-	        throws IOException, URISyntaxException, DataAccessException {
+	private static boolean executeModelTask(Task task, Store store, Country country, Category category, String type, List<String> listTypes, Long code)
+			throws IOException, URISyntaxException, DataAccessException {
 
 		boolean success = false;
 
@@ -503,7 +517,7 @@ public class Program {
 		} catch (Exception e) {
 			LOGGER.error("Error running script", e);
 			LOGGER.error(String.format("Error occured calculating values with parameters store [%s], country [%s], type [%s], [%s]", store, country, type,
-			        code == null ? "null" : code.toString()), e);
+					code == null ? "null" : code.toString()), e);
 		}
 
 		return success;
@@ -530,7 +544,7 @@ public class Program {
 	// private static String createInputFile(Store store, Country country,
 	// List<String> listTypes, Date date, String priceQuery, String fileRef)
 	private static String createInputFile(Store store, Country country, Category category, String type, List<String> listTypes, Long code, String priceQuery,
-	        String fileRef) throws IOException, DataAccessException {
+			String fileRef) throws IOException, DataAccessException {
 		String inputFilePath = contextBasedName(fileRef, store.a3Code, country.a2Code, type, code.toString()) + ".csv";
 
 		boolean createFile = false;
@@ -567,8 +581,8 @@ public class Program {
 			// store.a3Code, priceQuery, typesQueryPart, date.getTime() / 1000);
 
 			String query = String
-			        .format("SELECT `r`.`itemid`, `r`.`date`, `r`.`position`,`r`.`grossingposition`, `r`.`price` FROM `rank` AS `r` WHERE `r`.`country`='%s' AND `r`.`categoryid`=%d AND `r`.`source`='%s' AND %s AND `r`.%s AND `code2`<=%d",
-			                country.a2Code, category.id.longValue(), store.a3Code, priceQuery, typesQueryPart, code.longValue());
+					.format("SELECT `r`.`itemid`, `r`.`date`, `r`.`position`,`r`.`grossingposition`, `r`.`price` FROM `rank` AS `r` WHERE `r`.`country`='%s' AND `r`.`categoryid`=%d AND `r`.`source`='%s' AND %s AND `r`.%s AND `code2`<=%d",
+							country.a2Code, category.id.longValue(), store.a3Code, priceQuery, typesQueryPart, code.longValue());
 
 			Connection rankConnection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeRank.toString());
 
@@ -675,14 +689,15 @@ public class Program {
 	// }
 
 	private static void deleteTask(Taskqueue taskQueue, Task task, String taskQueueName) throws IOException {
-		Taskqueue.Tasks.Delete request = taskQueue.tasks().delete("s~" + PROJECT_NAME, taskQueueName, task.getId());
+		Taskqueue.Tasks.Delete request = taskQueue.tasks().delete("s~" + System.getProperty(PROJECT_NAME_KEY), taskQueueName, task.getId());
 		request.execute();
 	}
 
 	private static void expireTaskLease(Taskqueue taskQueue, Task task, String taskQueueName) throws IOException {
 		// this is a workaround for an issue with the task queue api
 		task.setQueueName(taskQueueName);
-		Taskqueue.Tasks.Update request = taskQueue.tasks().update("s~" + PROJECT_NAME, taskQueueName, task.getId(), Integer.valueOf(1), task);
+		Taskqueue.Tasks.Update request = taskQueue.tasks().update("s~" + System.getProperty(PROJECT_NAME_KEY), taskQueueName, task.getId(), Integer.valueOf(1),
+				task);
 		request.execute();
 	}
 
@@ -702,7 +717,7 @@ public class Program {
 
 	private static void loadItemsIaps() throws DataAccessException {
 		LOGGER.debug("Load iaps if enough time has passed");
-		
+
 		if (itemIapLookup.isEmpty() || expiredLookup()) {
 			String getItemPropertiesQuery = "SELECT DISTINCT `internalid`, `properties` FROM `item` WHERE `properties` <> 'null' AND NOT `properties` IS NULL AND `deleted`='n' ORDER BY `id` DESC";
 

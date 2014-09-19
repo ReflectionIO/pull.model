@@ -9,7 +9,9 @@
 package io.reflection.app.api.admin.shared.call;
 
 import io.reflection.app.api.shared.datatypes.Request;
+import io.reflection.app.datatypes.shared.Category;
 import io.reflection.app.datatypes.shared.Country;
+import io.reflection.app.datatypes.shared.ModelTypeType;
 import io.reflection.app.datatypes.shared.Store;
 
 import com.google.gson.JsonElement;
@@ -20,8 +22,10 @@ import com.google.gson.JsonPrimitive;
 public class GetModelOutcomeRequest extends Request {
 	public Country country;
 	public Store store;
-	public String code;
+	public Category category;
+	public Long code;
 	public String listType;
+	public ModelTypeType modelType;
 
 	@Override
 	public JsonObject toJson() {
@@ -30,10 +34,14 @@ public class GetModelOutcomeRequest extends Request {
 		object.add("country", jsonCountry);
 		JsonElement jsonStore = store == null ? JsonNull.INSTANCE : store.toJson();
 		object.add("store", jsonStore);
+		JsonElement jsonCategory = category == null ? JsonNull.INSTANCE : category.toJson();
+		object.add("category", jsonCategory);
 		JsonElement jsonCode = code == null ? JsonNull.INSTANCE : new JsonPrimitive(code);
 		object.add("code", jsonCode);
 		JsonElement jsonListType = listType == null ? JsonNull.INSTANCE : new JsonPrimitive(listType);
 		object.add("listType", jsonListType);
+		JsonElement jsonModelType = modelType == null ? JsonNull.INSTANCE : new JsonPrimitive(modelType.toString());
+		object.add("modelType", jsonModelType);
 		return object;
 	}
 
@@ -54,16 +62,29 @@ public class GetModelOutcomeRequest extends Request {
 				store.fromJson(jsonStore.getAsJsonObject());
 			}
 		}
+		if (jsonObject.has("category")) {
+			JsonElement jsonCategory = jsonObject.get("category");
+			if (jsonCategory != null) {
+				category = new Category();
+				category.fromJson(jsonCategory.getAsJsonObject());
+			}
+		}
 		if (jsonObject.has("code")) {
 			JsonElement jsonCode = jsonObject.get("code");
 			if (jsonCode != null) {
-				code = jsonCode.getAsString();
+				code = Long.valueOf(jsonCode.getAsLong());
 			}
 		}
 		if (jsonObject.has("listType")) {
 			JsonElement jsonListType = jsonObject.get("listType");
 			if (jsonListType != null) {
 				listType = jsonListType.getAsString();
+			}
+		}
+		if (jsonObject.has("modelType")) {
+			JsonElement jsonModelType = jsonObject.get("modelType");
+			if (jsonModelType != null) {
+				modelType = ModelTypeType.fromString(jsonModelType.getAsString());
 			}
 		}
 	}

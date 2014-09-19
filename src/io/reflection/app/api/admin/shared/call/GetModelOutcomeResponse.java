@@ -8,32 +8,43 @@
 //
 package io.reflection.app.api.admin.shared.call;
 
+import io.reflection.app.api.shared.datatypes.Response;
 import io.reflection.app.datatypes.shared.ModelRun;
+import io.reflection.app.datatypes.shared.SimpleModelRun;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
-import io.reflection.app.api.shared.datatypes.Response;
 
 public class GetModelOutcomeResponse extends Response {
-	public ModelRun run;
+	public ModelRun correlation;
+	public SimpleModelRun simple;
 
 	@Override
 	public JsonObject toJson() {
 		JsonObject object = super.toJson();
-		JsonElement jsonRun = run == null ? JsonNull.INSTANCE : run.toJson();
-		object.add("run", jsonRun);
+		JsonElement jsonCorrelation = correlation == null ? JsonNull.INSTANCE : correlation.toJson();
+		object.add("correlation", jsonCorrelation);
+		JsonElement jsonSimple = simple == null ? JsonNull.INSTANCE : simple.toJson();
+		object.add("simple", jsonSimple);
 		return object;
 	}
 
 	@Override
 	public void fromJson(JsonObject jsonObject) {
 		super.fromJson(jsonObject);
-		if (jsonObject.has("run")) {
-			JsonElement jsonRun = jsonObject.get("run");
-			if (jsonRun != null) {
-				run = new ModelRun();
-				run.fromJson(jsonRun.getAsJsonObject());
+		if (jsonObject.has("correlation")) {
+			JsonElement jsonCorrelation = jsonObject.get("correlation");
+			if (jsonCorrelation != null) {
+				correlation = new ModelRun();
+				correlation.fromJson(jsonCorrelation.getAsJsonObject());
+			}
+		}
+		if (jsonObject.has("simple")) {
+			JsonElement jsonSimple = jsonObject.get("simple");
+			if (jsonSimple != null) {
+				simple = new SimpleModelRun();
+				simple.fromJson(jsonSimple.getAsJsonObject());
 			}
 		}
 	}

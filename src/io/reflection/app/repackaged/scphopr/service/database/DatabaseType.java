@@ -35,7 +35,8 @@ public enum DatabaseType {
 	DatabaseTypeTag("tag"),
 	DatabaseTypeForum("forum"),
 	DatabaseTypeTopic("topic"),
-	DatabaseTypeReply("reply"), ;
+	DatabaseTypeReply("reply"),
+	DatabaseTypeSimpleModelRun("simplemodelrun"), ;
 
 	private String value;
 	private static Map<String, DatabaseType> valueLookup = null;
