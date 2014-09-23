@@ -23,6 +23,7 @@ public class DataAccount extends DataType {
 	public String username;
 	public String password;
 	public String properties;
+	public String active;
 
 	@Override
 	public JsonObject toJson() {
@@ -44,6 +45,8 @@ public class DataAccount extends DataType {
 		object.add("password", jsonPassword);
 		JsonElement jsonProperties = properties == null ? JsonNull.INSTANCE : new JsonPrimitive(properties);
 		object.add("properties", jsonProperties);
+		JsonElement jsonActive = active == null ? JsonNull.INSTANCE : new JsonPrimitive(active);
+		object.add("active", jsonActive);
 		return object;
 	}
 
@@ -87,6 +90,12 @@ public class DataAccount extends DataType {
 			JsonElement jsonProperties = jsonObject.get("properties");
 			if (jsonProperties != null) {
 				properties = jsonProperties.getAsString();
+			}
+		}
+		if (jsonObject.has("active")) {
+			JsonElement jsonActive = jsonObject.get("active");
+			if (jsonActive != null) {
+				active = jsonActive.getAsString();
 			}
 		}
 	}

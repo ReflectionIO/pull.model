@@ -7,6 +7,21 @@
 //
 package io.reflection.pullmodel;
 
+import static com.spacehopperstudios.utility.StringUtils.stripslashes;
+import static io.reflection.app.helpers.SqlQueryHelper.beforeAfterQuery;
+import static io.reflection.app.service.sale.ISaleService.FREE_OR_PAID_APP_IPAD_IOS;
+import static io.reflection.app.service.sale.ISaleService.FREE_OR_PAID_APP_IPHONE_AND_IPOD_TOUCH_IOS;
+import static io.reflection.app.service.sale.ISaleService.FREE_OR_PAID_APP_UNIVERSAL_IOS;
+import static io.reflection.app.service.sale.ISaleService.INAPP_PURCHASE_PURCHASE_IOS;
+import static io.reflection.app.service.sale.ISaleService.INAPP_PURCHASE_SUBSCRIPTION_IOS;
+import static io.reflection.app.service.sale.ISaleService.UPDATE_IPAD_IOS;
+import static io.reflection.app.service.sale.ISaleService.UPDATE_IPHONE_AND_IPOD_TOUCH_IOS;
+import static io.reflection.app.service.sale.ISaleService.UPDATE_UNIVERSAL_IOS;
+import static io.reflection.pullmodel.SystemConfigurator.APPLICATION_NAME_KEY;
+import static io.reflection.pullmodel.SystemConfigurator.DATA_STORE_NAME_KEY;
+import static io.reflection.pullmodel.SystemConfigurator.MODEL_QUEUE_NAME_KEY;
+import static io.reflection.pullmodel.SystemConfigurator.PROJECT_NAME_KEY;
+import static io.reflection.pullmodel.SystemConfigurator.SECRET_FILE_NAME_KEY;
 import io.reflection.app.api.admin.shared.call.TriggerPredictRequest;
 import io.reflection.app.api.admin.shared.call.TriggerPredictResponse;
 import io.reflection.app.api.core.shared.call.LoginRequest;
@@ -21,7 +36,12 @@ import io.reflection.app.datatypes.shared.Country;
 import io.reflection.app.datatypes.shared.FeedFetch;
 import io.reflection.app.datatypes.shared.FeedFetchStatusType;
 import io.reflection.app.datatypes.shared.FormType;
+import io.reflection.app.datatypes.shared.Item;
+import io.reflection.app.datatypes.shared.ListTypeType;
 import io.reflection.app.datatypes.shared.ModelRun;
+import io.reflection.app.datatypes.shared.Rank;
+import io.reflection.app.datatypes.shared.Sale;
+import io.reflection.app.datatypes.shared.SimpleModelRun;
 import io.reflection.app.datatypes.shared.Store;
 import io.reflection.app.modellers.Modeller;
 import io.reflection.app.modellers.ModellerFactory;
@@ -31,6 +51,7 @@ import io.reflection.app.repackaged.scphopr.service.database.DatabaseType;
 import io.reflection.app.service.category.CategoryServiceProvider;
 import io.reflection.app.service.feedfetch.FeedFetchServiceProvider;
 import io.reflection.app.service.modelrun.ModelRunServiceProvider;
+import io.reflection.app.service.simplemodelrun.SimpleModelRunServiceProvider;
 import io.reflection.app.shared.util.DataTypeHelper;
 import io.reflection.pullmodel.json.service.client.AdminService;
 import io.reflection.pullmodel.json.service.client.CoreService;
@@ -49,8 +70,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 import org.apache.commons.codec.binary.Base64;
@@ -77,8 +100,6 @@ import com.google.api.services.taskqueue.model.Tasks;
 import com.spacehopperstudios.utility.StringUtils;
 import com.willshex.gson.json.service.shared.StatusType;
 
-import static io.reflection.pullmodel.SystemConfigurator.*;
-
 /**
  * @author billy1380
  * 
@@ -87,6 +108,8 @@ public class Program {
 	private static final Logger LOGGER = LoggerFactory.getLogger(Program.class);
 
 	// private static String PREDICT_QUEUE_NAME = "predict";
+
+	private static final String MISSING_ID_SKU_PREFIX = "missing -- ";
 
 	private static final int DEFAULT_LEASE_DURATION_SECONDS = 60 * 60;
 	private static final int DEFAULT_TASKS_TO_LEASE = 1;
@@ -101,8 +124,6 @@ public class Program {
 	private static int IS_COMPUTE_ENGINE_ARG_INDEX = 0;
 	private static int LEASE_SECONDS_ARG_INDEX = 1;
 	private static int LEASE_COUNT_ARG_INDEX = 2;
-
-	private static final File DATA_STORE_DIR = new File(System.getProperty("user.home"), System.getProperty(DATA_STORE_NAME_KEY));
 
 	private static FileDataStoreFactory dataStoreFactory;
 	private static HttpTransport httpTransport;
@@ -170,7 +191,7 @@ public class Program {
 
 	private static void runModelTasks() throws Exception {
 		httpTransport = GoogleNetHttpTransport.newTrustedTransport();
-		dataStoreFactory = new FileDataStoreFactory(DATA_STORE_DIR);
+		dataStoreFactory = new FileDataStoreFactory(new File(System.getProperty("user.home"), System.getProperty(DATA_STORE_NAME_KEY)));
 
 		LOGGER.debug("Authenticating");
 		Credential credential = authorize();
@@ -500,7 +521,7 @@ public class Program {
 			// paidFilePath, TRUNCATED_OUTPUT_PATH, "400", "40", "500000");
 			runRScriptWithParameters("robustModel.R", freeFilePath, paidFilePath, outputPath, "200", "40", "500000", "1e5", "1e9", "1e2");
 
-			persistValues(outputPath, store, country, modeller.getForm(type), code);
+			persistCorrelationModelValues(outputPath, store, country, modeller.getForm(type), code);
 
 			alterFeedFetchStatus(store, country, category, listTypes, code);
 
@@ -541,8 +562,6 @@ public class Program {
 		return sb.toString();
 	}
 
-	// private static String createInputFile(Store store, Country country,
-	// List<String> listTypes, Date date, String priceQuery, String fileRef)
 	private static String createInputFile(Store store, Country country, Category category, String type, List<String> listTypes, Long code, String priceQuery,
 			String fileRef) throws IOException, DataAccessException {
 		String inputFilePath = contextBasedName(fileRef, store.a3Code, country.a2Code, type, code.toString()) + ".csv";
@@ -638,6 +657,229 @@ public class Program {
 		return inputFilePath;
 	}
 
+	private String createSimpleInputFile(String store, String country, String type, Long categoryId, String listType, List<String> listTypes, Date startDate,
+			Date endDate, Long code) throws IOException, DataAccessException {
+
+		String inputFilePath = contextBasedName(listType, store, country, type, categoryId == null ? Long.toString(24) : categoryId.toString()) + ".csv";
+
+		FileWriter writer = null;
+
+		String typesQueryPart = null;
+		if (listTypes.size() == 1) {
+			typesQueryPart = String.format("`type`='%s'", listTypes.get(0));
+		} else {
+			typesQueryPart = "`type` IN ('" + StringUtils.join(listTypes, "','") + "')";
+		}
+
+		String query = String.format(
+				"SELECT `itemid`, `date`, %s as `position`, `price` FROM `rank` WHERE %s `country`='%s' AND `categoryid`=%d AND `source`='%s' AND %s",
+				isDownloadListType(listType) ? "`position`" : "`grossingposition`", beforeAfterQuery("`date`", endDate, startDate), country,
+				categoryId == null ? 24 : categoryId.longValue(), store, typesQueryPart);
+
+		Connection connection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeRank.toString());
+
+		Map<String, Rank> itemIdRank = new HashMap<String, Rank>();
+		boolean createFile = false;
+
+		try {
+			connection.connect();
+			connection.executeQuery(query.toString());
+
+			Rank rank;
+			String itemId;
+			Integer position;
+
+			while (connection.fetchNextRow()) {
+				if ((position = connection.getCurrentRowInteger("position")).intValue() == 0) continue;
+
+				itemId = connection.getCurrentRowString("itemid");
+
+				if ((rank = itemIdRank.get(itemId)) == null) {
+					rank = new Rank();
+
+					rank.itemId = itemId;
+					rank.position = position;
+					rank.price = Float.valueOf((float) connection.getCurrentRowInteger("price").intValue() / 100.0f);
+
+					itemIdRank.put(itemId, rank);
+				} else {
+					if (rank.position.intValue() > position.intValue()) {
+						rank.position = position;
+					}
+				}
+			}
+
+			createFile = true;
+		} finally {
+			if (connection != null) {
+				connection.disconnect();
+			}
+		}
+
+		if (createFile) {
+			try {
+				writer = new FileWriter(inputFilePath);
+
+				writer.append("#item id,position,price,usesiap");
+
+				for (Rank current : itemIdRank.values()) {
+					writer.append("\n");
+
+					writer.append("\"");
+
+					writer.append(current.itemId);
+					writer.append("\",");
+
+					writer.append(current.position.toString());
+					writer.append(",");
+
+					writer.append(current.price.toString());
+					writer.append(",");
+
+					String usesIap = lookupItemIap(current.itemId);
+					writer.append(usesIap);
+				}
+			} finally {
+				if (writer != null) {
+					writer.close();
+				}
+			}
+		}
+
+		return inputFilePath;
+	}
+
+	public String createDeveloperDataSummary(String store, String country, String type, Date startDate, Date endDate, Long categoryId) throws IOException,
+			DataAccessException {
+		String inputFilePath = contextBasedName("sale", store, country, type, categoryId == null ? Long.toString(24) : categoryId.toString()) + ".csv";
+
+		FileWriter writer = null;
+		boolean createFile = false;
+
+		// ios has a datasource itunes connect
+		String dataSourceA3Code = "ios".equals(store) ? "itc" : "*** error ***";
+
+		Category category = CategoryServiceProvider.provide().getCategory(categoryId);
+
+		String query = String
+				.format("SELECT `itemid`,`sku`,`typeidentifier`,`units`,`customerprice`,`parentidentifier` FROM `sale` JOIN `dataaccount` on `dataaccount`.`id`=`dataaccountid` JOIN `datasource` ON `sourceid`=`datasource`.`id` WHERE `datasource`.`a3code`= '%s' AND %s %s `country`='%s'",
+						dataSourceA3Code, beforeAfterQuery("`begin`", endDate, startDate), category == null || category.name == null ? "" : " `category`='"
+								+ category.name + "' AND", country);
+
+		Connection connection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeSale.toString());
+
+		List<Sale> sales = new ArrayList<Sale>();
+		Map<String, String> parentIdItemIdLookup = new HashMap<String, String>();
+
+		try {
+			connection.connect();
+			connection.executeQuery(query);
+
+			Sale sale;
+			while (connection.fetchNextRow()) {
+				sale = new Sale();
+
+				sale.item = new Item();
+				sale.item.internalId = connection.getCurrentRowString("itemid");
+				sale.typeIdentifier = connection.getCurrentRowString("typeidentifier");
+				sale.sku = connection.getCurrentRowString("sku");
+
+				sale.units = connection.getCurrentRowInteger("units");
+				sale.customerPrice = connection.getCurrentRowInteger("customerprice");
+				sale.parentIdentifier = stripslashes(connection.getCurrentRowString("parentidentifier"));
+
+				if (FREE_OR_PAID_APP_UNIVERSAL_IOS.equals(sale.typeIdentifier) || UPDATE_UNIVERSAL_IOS.equals(sale.typeIdentifier)
+						|| ("other".equals(type) && (FREE_OR_PAID_APP_IPHONE_AND_IPOD_TOUCH_IOS.equals(sale.typeIdentifier)))
+						|| ("other".equals(type) && (UPDATE_IPHONE_AND_IPOD_TOUCH_IOS.equals(sale.typeIdentifier)))
+						|| ("tablet".equals(type) && (FREE_OR_PAID_APP_IPAD_IOS.equals(sale.typeIdentifier)))
+						|| ("tablet".equals(type) && (UPDATE_IPAD_IOS.equals(sale.typeIdentifier))) || INAPP_PURCHASE_PURCHASE_IOS.equals(sale.typeIdentifier)
+						|| INAPP_PURCHASE_SUBSCRIPTION_IOS.equals(sale.typeIdentifier)) {
+					sales.add(sale);
+				}
+
+				// If type identifier != IA1 or IA9, add parent identifiers into
+				// the Map
+				if (!sale.typeIdentifier.equals(INAPP_PURCHASE_PURCHASE_IOS) && !sale.typeIdentifier.equals(INAPP_PURCHASE_SUBSCRIPTION_IOS)) {
+					parentIdItemIdLookup.put(sale.sku, sale.item.internalId);
+				}
+			}
+
+			createFile = true;
+		} finally {
+			if (connection != null) {
+				connection.disconnect();
+			}
+		}
+
+		if (createFile) {
+			String itemId;
+
+			Map<String, Rank> itemIDsRankLookup = new HashMap<String, Rank>();
+			Rank rank;
+			Set<String> missingIdentifiers = new HashSet<String>();
+			for (Sale sale : sales) {
+				// Assign item id of the parent to IAP and Subscriptions
+				if (sale.typeIdentifier.equals(INAPP_PURCHASE_PURCHASE_IOS) || sale.typeIdentifier.equals(INAPP_PURCHASE_SUBSCRIPTION_IOS)) {
+					itemId = parentIdItemIdLookup.get(sale.parentIdentifier);
+				} else {
+					itemId = sale.item.internalId;
+				}
+
+				if (itemId == null) {
+					itemId = MISSING_ID_SKU_PREFIX + sale.parentIdentifier;
+					missingIdentifiers.add(sale.parentIdentifier);
+				}
+
+				if (itemIDsRankLookup.get(itemId) == null) {
+					rank = new Rank();
+					rank.downloads = Integer.valueOf(0);
+					rank.revenue = Float.valueOf(0.0f);
+
+					itemIDsRankLookup.put(itemId, rank);
+				} else {
+					rank = itemIDsRankLookup.get(itemId);
+				}
+
+				// If units and customer prices are negatives (refunds),
+				// subtract
+				// the value setting units positive
+				rank.revenue += (Math.abs(sale.units.floatValue()) * (float) sale.customerPrice.intValue()) / 100.0f;
+
+				// Take into account price and downloads only from main Apps
+				if (sale.typeIdentifier.equals(FREE_OR_PAID_APP_IPHONE_AND_IPOD_TOUCH_IOS) || sale.typeIdentifier.equals(FREE_OR_PAID_APP_UNIVERSAL_IOS)
+						|| sale.typeIdentifier.equals(FREE_OR_PAID_APP_IPAD_IOS)) {
+					rank.downloads += sale.units.intValue();
+				}
+			}
+
+			try {
+				writer = new FileWriter(inputFilePath);
+
+				writer.append("#item id,revenue,downloads");
+
+				for (String key : itemIDsRankLookup.keySet()) {
+					rank = itemIDsRankLookup.get(key);
+
+					writer.append("\n");
+
+					writer.append(key);
+					writer.append(",");
+
+					writer.append(Double.toString(rank.revenue));
+					writer.append(",");
+
+					writer.append(Double.toString(rank.downloads));
+				}
+			} finally {
+				if (writer != null) {
+					writer.close();
+				}
+			}
+		}
+
+		return inputFilePath;
+	}
+
 	private static void runRScriptWithParameters(String name, String... parmeters) throws IOException, InterruptedException {
 		LOGGER.debug("Entering runRScript");
 
@@ -680,13 +922,6 @@ public class Program {
 
 		LOGGER.debug("Exiting runRScript");
 	}
-
-	// private static void insertTask(Taskqueue taskQueue, Task task, String
-	// taskQueueName) throws IOException {
-	// Taskqueue.Tasks.Insert request = taskQueue.tasks().insert(PROJECT_NAME,
-	// taskQueueName, task);
-	// request.execute();
-	// }
 
 	private static void deleteTask(Taskqueue taskQueue, Task task, String taskQueueName) throws IOException {
 		Taskqueue.Tasks.Delete request = taskQueue.tasks().delete("s~" + System.getProperty(PROJECT_NAME_KEY), taskQueueName, task.getId());
@@ -799,8 +1034,8 @@ public class Program {
 	 * @throws IOException
 	 * 
 	 */
-	private static void persistValues(String resultsFileName, Store store, Country country, FormType form, Long code) throws DataAccessException, IOException {
-
+	private static void persistCorrelationModelValues(String resultsFileName, Store store, Country country, FormType form, Long code)
+			throws DataAccessException, IOException {
 		Map<String, String> results = parseOutputFile(resultsFileName);
 
 		ModelRun run = ModelRunServiceProvider.provide().getGatherCodeModelRun(country, store, form, code);
@@ -839,6 +1074,38 @@ public class Program {
 		}
 	}
 
+	private static void persistSimpleModelValues(String resultsFileName, Store store, Country country, Category category, FormType form, ListTypeType listType,
+			Date date, Long code) throws IOException, DataAccessException {
+		Map<String, String> results = parseOutputFile(resultsFileName);
+
+		SimpleModelRun run = SimpleModelRunServiceProvider.provide().getGatherCodeSimpleModelRun(country, store, category, form, listType, code);
+		
+		boolean isUpdate = false;
+		
+		if (run == null) {
+			run = new SimpleModelRun();
+		} else {
+			isUpdate = false;
+		}
+		
+		if (!isUpdate) {
+			run.country = country.a2Code;
+			run.store = country.a3Code;
+			run.category = category;
+			run.form = form;
+			run.listType = listType;
+		}
+		
+		run.a = Double.valueOf(results.get(A_OUTPUT));
+		run.b = Double.valueOf(results.get(B_OUTPUT));
+		
+		if (isUpdate) {
+			SimpleModelRunServiceProvider.provide().updateSimpleModelRun(run);
+		} else {
+			SimpleModelRunServiceProvider.provide().addSimpleModelRun(run);
+		}
+	}
+
 	private static Map<String, String> parseOutputFile(String fileFullPath) throws IOException {
 		BufferedReader reader = null;
 		String line;
@@ -849,7 +1116,6 @@ public class Program {
 		try {
 			reader = new BufferedReader(new FileReader(fileFullPath));
 			while ((line = reader.readLine()) != null) {
-
 				splitLine = line.split(",");
 
 				if (splitLine != null && splitLine.length == 2) {
@@ -873,6 +1139,10 @@ public class Program {
 		}
 
 		return parsedVariables;
+	}
+
+	protected boolean isDownloadListType(String listType) {
+		return !listType.contains("grossing");
 	}
 
 }

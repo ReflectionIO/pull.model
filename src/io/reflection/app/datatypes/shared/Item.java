@@ -24,6 +24,7 @@ public class Item extends DataType {
 	public String source;
 	public String type;
 	public Date added;
+	public String country;
 	public String currency;
 	public String smallImage;
 	public String mediumImage;
@@ -49,6 +50,8 @@ public class Item extends DataType {
 		object.add("type", jsonType);
 		JsonElement jsonAdded = added == null ? JsonNull.INSTANCE : new JsonPrimitive(added.getTime());
 		object.add("added", jsonAdded);
+		JsonElement jsonCountry = country == null ? JsonNull.INSTANCE : new JsonPrimitive(country);
+		object.add("country", jsonCountry);
 		JsonElement jsonCurrency = currency == null ? JsonNull.INSTANCE : new JsonPrimitive(currency);
 		object.add("currency", jsonCurrency);
 		JsonElement jsonSmallImage = smallImage == null ? JsonNull.INSTANCE : new JsonPrimitive(smallImage);
@@ -111,6 +114,12 @@ public class Item extends DataType {
 			JsonElement jsonAdded = jsonObject.get("added");
 			if (jsonAdded != null) {
 				added = new Date(jsonAdded.getAsLong());
+			}
+		}
+		if (jsonObject.has("country")) {
+			JsonElement jsonCountry = jsonObject.get("country");
+			if (jsonCountry != null) {
+				country = jsonCountry.getAsString();
 			}
 		}
 		if (jsonObject.has("currency")) {

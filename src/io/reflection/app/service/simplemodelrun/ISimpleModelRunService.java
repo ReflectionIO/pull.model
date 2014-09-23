@@ -12,6 +12,7 @@ import io.reflection.app.api.exception.DataAccessException;
 import io.reflection.app.datatypes.shared.Category;
 import io.reflection.app.datatypes.shared.Country;
 import io.reflection.app.datatypes.shared.FormType;
+import io.reflection.app.datatypes.shared.ListTypeType;
 import io.reflection.app.datatypes.shared.SimpleModelRun;
 import io.reflection.app.datatypes.shared.Store;
 
@@ -50,40 +51,45 @@ public interface ISimpleModelRunService extends IService {
 	 * 
 	 * @param country
 	 * @param store
-	 * @param form
 	 * @param category
+	 * @param form
+	 * @param listType
 	 * @param code
 	 * @return
 	 * @throws DataAccessException
 	 */
-	public SimpleModelRun getGatherCodeSimpleModelRun(Country country, Store store, FormType form, Category category, Long code) throws DataAccessException;
+	public SimpleModelRun getGatherCodeSimpleModelRun(Country country, Store store, Category category, FormType form, ListTypeType listType, Long code)
+			throws DataAccessException;
 
 	/**
 	 * Get simple model run
 	 * 
 	 * @param country
 	 * @param store
-	 * @param form
 	 * @param category
+	 * @param form
+	 * @param listType
 	 * @param start
 	 * @param end
 	 * @return
 	 * @throws DataAccessException
 	 */
-	public SimpleModelRun getSimpleModelRun(Country country, Store store, FormType form, Category category, Date start, Date end) throws DataAccessException;
+	public SimpleModelRun getSimpleModelRun(Country country, Store store, Category category, FormType form, ListTypeType listType, Date start, Date end)
+			throws DataAccessException;
 
 	/**
 	 * Get date simple model run batch
 	 * 
 	 * @param country
 	 * @param store
-	 * @param form
 	 * @param category
+	 * @param form
+	 * @param listType
 	 * @param dates
 	 * @return
 	 * @throws DataAccessException
 	 */
-	public List<SimpleModelRun> getDateSimpleModelRunBatch(Country country, Store store, FormType form, Category category, Collection<Date> dates)
-			throws DataAccessException;
+	public List<SimpleModelRun> getDateSimpleModelRunBatch(Country country, Store store, Category category, FormType form, ListTypeType listType,
+			Collection<Date> dates) throws DataAccessException;
 
 }

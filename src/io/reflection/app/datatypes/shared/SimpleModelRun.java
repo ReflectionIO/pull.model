@@ -19,6 +19,7 @@ public class SimpleModelRun extends DataType {
 	public String store;
 	public Long code;
 	public FormType form;
+	public ListTypeType listType;
 	public Double a;
 	public Double b;
 
@@ -35,6 +36,8 @@ public class SimpleModelRun extends DataType {
 		object.add("code", jsonCode);
 		JsonElement jsonForm = form == null ? JsonNull.INSTANCE : new JsonPrimitive(form.toString());
 		object.add("form", jsonForm);
+		JsonElement jsonListType = listType == null ? JsonNull.INSTANCE : new JsonPrimitive(listType.toString());
+		object.add("listType", jsonListType);
 		JsonElement jsonA = a == null ? JsonNull.INSTANCE : new JsonPrimitive(a);
 		object.add("a", jsonA);
 		JsonElement jsonB = b == null ? JsonNull.INSTANCE : new JsonPrimitive(b);
@@ -74,6 +77,12 @@ public class SimpleModelRun extends DataType {
 			JsonElement jsonForm = jsonObject.get("form");
 			if (jsonForm != null) {
 				form = FormType.fromString(jsonForm.getAsString());
+			}
+		}
+		if (jsonObject.has("listType")) {
+			JsonElement jsonListType = jsonObject.get("listType");
+			if (jsonListType != null) {
+				listType = ListTypeType.fromString(jsonListType.getAsString());
 			}
 		}
 		if (jsonObject.has("a")) {

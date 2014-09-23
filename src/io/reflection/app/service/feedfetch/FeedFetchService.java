@@ -574,7 +574,7 @@ final class FeedFetchService implements IFeedFetchService {
 				rankConnection.connect();
 				String getGatherCode = String
 						.format("SELECT `code2` FROM `rank` WHERE CAST(`country` AS BINARY)=CAST('%s' AS BINARY) AND CAST(`source` AS BINARY)=CAST('%s' AS BINARY) AND %s `deleted`='n' ORDER BY `date` DESC LIMIT 1",
-								addslashes(country.a2Code), addslashes(store.a3Code), beforeAfterQuery(before, after));
+								addslashes(country.a2Code), addslashes(store.a3Code), beforeAfterQuery("`date`", before, after));
 
 				rankConnection.executeQuery(getGatherCode);
 
