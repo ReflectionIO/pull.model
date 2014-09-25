@@ -593,5 +593,37 @@ final class FeedFetchService implements IFeedFetchService {
 
 		return code;
 	}
+	
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see io.reflection.app.service.feedfetch.IFeedFetchService#getListTypeCodeFeedFetch(io.reflection.app.datatypes.shared.Country,
+	 * io.reflection.app.datatypes.shared.Store, io.reflection.app.datatypes.shared.Category, java.lang.String, java.lang.Long)
+	 */
+	@Override
+	public FeedFetch getListTypeCodeFeedFetch(Country country, Store store, Category category, String listType, Long code) throws DataAccessException {
+		FeedFetch feedFetch = null;
+
+		IDatabaseService databaseService = DatabaseServiceProvider.provide();
+		Connection feedFetchConnection = databaseService.getNamedConnection(DatabaseType.DatabaseTypeFeedFetch.toString());
+
+		String getListTypeCodeFeedFetchQuery = String
+				.format("SELECT * FROM `feedfetch` WHERE CAST(`country` AS BINARY)=CAST('%s' AS BINARY) AND CAST(`source` AS BINARY)=CAST('%s' AS BINARY) AND `categoryid`=%d AND CAST(`type` AS BINARY)=CAST('%s' AS BINARY) AND `code2`=%d AND `deleted`='n' LIMIT 1",
+						addslashes(country.a2Code), addslashes(store.a3Code), category.id.longValue(), listType, code.longValue());
+		try {
+			feedFetchConnection.connect();
+			feedFetchConnection.executeQuery(getListTypeCodeFeedFetchQuery);
+
+			if (feedFetchConnection.fetchNextRow()) {
+				feedFetch = toFeedFetch(feedFetchConnection);
+			}
+		} finally {
+			if (feedFetchConnection != null) {
+				feedFetchConnection.disconnect();
+			}
+		}
+
+		return feedFetch;
+	}
 
 }

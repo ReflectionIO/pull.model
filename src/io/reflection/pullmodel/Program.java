@@ -37,7 +37,6 @@ import io.reflection.app.datatypes.shared.FeedFetch;
 import io.reflection.app.datatypes.shared.FeedFetchStatusType;
 import io.reflection.app.datatypes.shared.FormType;
 import io.reflection.app.datatypes.shared.Item;
-import io.reflection.app.datatypes.shared.ListTypeType;
 import io.reflection.app.datatypes.shared.ModelRun;
 import io.reflection.app.datatypes.shared.ModelTypeType;
 import io.reflection.app.datatypes.shared.Rank;
@@ -542,10 +541,11 @@ public class Program {
 
 				runRScriptWithParameters("simpleModel.R", inputFilePath, salesInputFilePath, outputPath);
 
-				// FIXME: this will not work because because ListTypeType are incompatible with listTypes and listType
-				persistSimpleModelValues(outputPath, store, country, category, form, ListTypeType.fromString(listType), code);
+				FeedFetch feedFetch = FeedFetchServiceProvider.provide().getListTypeCodeFeedFetch(country, store, category, listType, code);
 
-				alterFeedFetchStatus(store, country, category, listTypes, code);
+				persistSimpleModelValues(outputPath, feedFetch);
+
+				alterFeedFetchStatus(feedFetch);
 
 				deleteFile(outputPath);
 
@@ -1075,6 +1075,11 @@ public class Program {
 		}
 	}
 
+	private static void alterFeedFetchStatus(FeedFetch feedFetch) throws DataAccessException {
+		feedFetch.status = FeedFetchStatusType.FeedFetchStatusTypeModelled;
+		FeedFetchServiceProvider.provide().updateFeedFetch(feedFetch);
+	}
+
 	/**
 	 * @param code
 	 * @param listTypes
@@ -1124,11 +1129,10 @@ public class Program {
 		}
 	}
 
-	private static void persistSimpleModelValues(String resultsFileName, Store store, Country country, Category category, FormType form, ListTypeType listType,
-			Long code) throws IOException, DataAccessException {
+	private static void persistSimpleModelValues(String resultsFileName, FeedFetch feedFetch) throws IOException, DataAccessException {
 		Map<String, String> results = parseOutputFile(resultsFileName);
 
-		SimpleModelRun run = SimpleModelRunServiceProvider.provide().getGatherCodeSimpleModelRun(country, store, category, form, listType, code);
+		SimpleModelRun run = SimpleModelRunServiceProvider.provide().getFeedFetchSimpleModelRun(feedFetch);
 
 		boolean isUpdate = false;
 
@@ -1139,12 +1143,7 @@ public class Program {
 		}
 
 		if (!isUpdate) {
-			run.country = country.a2Code;
-			run.store = country.a3Code;
-			run.category = category;
-			run.form = form;
-			run.listType = listType;
-			// TODO: run.code
+			run.feedFetch = feedFetch;
 		}
 
 		run.a = Double.valueOf(results.get(A_OUTPUT));

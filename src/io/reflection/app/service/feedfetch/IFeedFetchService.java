@@ -11,6 +11,7 @@ package io.reflection.app.service.feedfetch;
 
 import io.reflection.app.api.exception.DataAccessException;
 import io.reflection.app.api.shared.datatypes.Pager;
+import io.reflection.app.datatypes.shared.Category;
 import io.reflection.app.datatypes.shared.Country;
 import io.reflection.app.datatypes.shared.FeedFetch;
 import io.reflection.app.datatypes.shared.Store;
@@ -138,9 +139,10 @@ public interface IFeedFetchService extends IService {
 	 * @throws DataAccessException
 	 */
 	public Long getCode() throws DataAccessException;
-	
+
 	/**
 	 * Gets the gather for the feed fetch
+	 * 
 	 * @param country
 	 * @param store
 	 * @param after
@@ -149,5 +151,17 @@ public interface IFeedFetchService extends IService {
 	 * @throws DataAccessException
 	 */
 	public Long getGatherCode(Country country, Store store, Date after, Date before) throws DataAccessException;
+
+	/**
+	 * 
+	 * @param country
+	 * @param store
+	 * @param category
+	 * @param listType
+	 * @param code
+	 * @return
+	 * @throws DataAccessException
+	 */
+	public FeedFetch getListTypeCodeFeedFetch(Country country, Store store, Category category, String listType, Long code) throws DataAccessException;
 
 }
