@@ -11,6 +11,7 @@ import io.reflection.app.datatypes.shared.Item;
 import io.reflection.app.datatypes.shared.Permission;
 import io.reflection.app.datatypes.shared.Rank;
 import io.reflection.app.datatypes.shared.Role;
+import io.reflection.app.datatypes.shared.Store;
 
 import java.util.Collections;
 import java.util.Comparator;
@@ -25,6 +26,10 @@ import com.google.gson.JsonParser;
  * 
  */
 public class DataTypeHelper {
+
+	public static final String IOS_STORE_A3 = "ios";
+
+	private static final Store IOS_STORE = new Store();
 
 	public static final String ACTIVE_VALUE = "y";
 	public static final String INACTIVE_VALUE = "n";
@@ -125,5 +130,13 @@ public class DataTypeHelper {
 
 			});
 		}
+	}
+
+	public static Store getIosStore() {
+		if (!IOS_STORE_A3.equals(IOS_STORE.a3Code)) {
+			IOS_STORE.a3Code = IOS_STORE_A3;
+		}
+
+		return IOS_STORE;
 	}
 }

@@ -39,6 +39,7 @@ import io.reflection.app.datatypes.shared.FormType;
 import io.reflection.app.datatypes.shared.Item;
 import io.reflection.app.datatypes.shared.ListTypeType;
 import io.reflection.app.datatypes.shared.ModelRun;
+import io.reflection.app.datatypes.shared.ModelTypeType;
 import io.reflection.app.datatypes.shared.Rank;
 import io.reflection.app.datatypes.shared.Sale;
 import io.reflection.app.datatypes.shared.SimpleModelRun;
@@ -247,9 +248,11 @@ public class Program {
 					String country = mappedParams.get("country");
 					String categoryIdParam = mappedParams.get("categoryid");
 					Long categoryId = categoryIdParam == null ? null : Long.valueOf(categoryIdParam);
-					String type = mappedParams.get("type");
+					String listType = mappedParams.get("type");
+					String modelTypeParam = mappedParams.get("modeltype");
 					String codeParam = mappedParams.get("code");
 					Long code = codeParam == null ? null : Long.valueOf(codeParam);
+					ModelTypeType modelType = modelTypeParam == null ? null : ModelTypeType.fromString(modelTypeParam);
 
 					Country c = new Country();
 					c.a2Code = country;
@@ -268,12 +271,15 @@ public class Program {
 
 					Collector collector = CollectorFactory.getCollectorForStore(store);
 					List<String> listTypes = new ArrayList<String>();
-					listTypes.addAll(collector.getCounterpartTypes(type));
-					listTypes.add(type);
+					listTypes.addAll(collector.getCounterpartTypes(listType));
+					listTypes.add(listType);
 
-					if (executeModelTask(leasedTask, s, c, category, type, listTypes, code)) {
+					Modeller modeller = ModellerFactory.getModellerForStore(store);
+					FormType form = modeller.getForm(listType);
+
+					if (executeModelTask(leasedTask, modelType, s, c, category, form, listType, listTypes, code)) {
 						try {
-							callApiTriggerPredict(s, c, category, type, listTypes, code);
+							callApiTriggerPredict(modelType, s, c, category, listType, listTypes, code);
 
 							LOGGER.info("Deleting successfully complete model task");
 							deleteTask(taskQueueApi, leasedTask, System.getProperty(MODEL_QUEUE_NAME_KEY));
@@ -290,11 +296,11 @@ public class Program {
 		}
 	}
 
-	private static void callApiTriggerPredict(final Store store, final Country country, final Category category, final String type,
-			final List<String> listTypes, final Long code) throws InterruptedException, ExecutionException {
+	private static void callApiTriggerPredict(final ModelTypeType modelType, final Store store, final Country country, final Category category,
+			final String listType, final List<String> listTypes, final Long code) throws InterruptedException, ExecutionException {
 
 		if (session == null) {
-			callApiLogin(store, country, category, type, listTypes, code);
+			callApiLogin(modelType, store, country, category, listType, listTypes, code);
 		} else {
 
 			AdminService admin = new AdminService();
@@ -314,8 +320,8 @@ public class Program {
 				@Override
 				public void onSuccess(TriggerPredictResponse output) {
 					if (output.status == StatusType.StatusTypeSuccess) {
-						LOGGER.info(String.format("Triggered predict for store [%s], country [%s], type [%s], code [%d] ", store.a3Code, country.a2Code, type,
-								code.longValue()));
+						LOGGER.info(String.format("Triggered predict for store [%s], country [%s], type [%s], code [%d] ", store.a3Code, country.a2Code,
+								listType, code.longValue()));
 					} else {
 						if (output.error != null
 								&& output.error.code != null
@@ -326,7 +332,7 @@ public class Program {
 							session = null;
 
 							try {
-								callApiTriggerPredict(store, country, category, type, listTypes, code);
+								callApiTriggerPredict(modelType, store, country, category, listType, listTypes, code);
 							} catch (Throwable caught) {
 								LOGGER.error("An error occured while calling Api Trigger predict", caught);
 								throw new RuntimeException(caught);
@@ -358,8 +364,8 @@ public class Program {
 		return apiSession;
 	}
 
-	private static void callApiLogin(final Store store, final Country country, final Category category, final String type, final List<String> listType,
-			final Long code) {
+	private static void callApiLogin(final ModelTypeType modelType, final Store store, final Country country, final Category category, final String listType,
+			final List<String> listTypes, final Long code) {
 		CoreService core = new CoreService();
 		core.setUrl(System.getProperty(SystemConfigurator.CORE_SERVICE_URL_KEY));
 
@@ -381,7 +387,7 @@ public class Program {
 							session = output.session;
 
 							try {
-								callApiTriggerPredict(store, country, category, type, listType, code);
+								callApiTriggerPredict(modelType, store, country, category, listType, listTypes, code);
 							} catch (Throwable caught) {
 								LOGGER.error("An error occured while calling Api Trigger predict", caught);
 								throw new RuntimeException(caught);
@@ -496,8 +502,8 @@ public class Program {
 	 * @throws URISyntaxException
 	 * @throws DataAccessException
 	 */
-	private static boolean executeModelTask(Task task, Store store, Country country, Category category, String type, List<String> listTypes, Long code)
-			throws IOException, URISyntaxException, DataAccessException {
+	private static boolean executeModelTask(Task task, ModelTypeType modelType, Store store, Country country, Category category, FormType form,
+			String listType, List<String> listTypes, Long code) throws IOException, URISyntaxException, DataAccessException {
 
 		boolean success = false;
 
@@ -505,39 +511,55 @@ public class Program {
 		// RankServiceProvider.provide().getCodeLastRankDate(code);
 
 		try {
+			if (modelType == ModelTypeType.ModelTypeTypeCorrelation) {
+				String freeFilePath = createInputFile(store, country, category, listType, listTypes, code, "`price`=0", "free");
+				String paidFilePath = createInputFile(store, country, category, listType, listTypes, code, "`price`<>0", "paid");
 
-			// String freeFilePath = createInputFile(s, c, listTypes, date,
-			// "`price`=0", freeFileRef);
-			// String paidFilePath = createInputFile(s, c, listTypes, date,
-			// "`price`<>0", paidFileRef);
-			String freeFilePath = createInputFile(store, country, category, type, listTypes, code, "`price`=0", "free");
-			String paidFilePath = createInputFile(store, country, category, type, listTypes, code, "`price`<>0", "paid");
+				String outputPath = contextBasedName(ROBUST_OUTPUT_PATH, store.a3Code, country.a2Code, category.id.toString(), listType, code.toString());
 
-			Modeller modeller = ModellerFactory.getModellerForStore(store.a3Code);
+				// runRScriptWithParameters("model.R", freeFilePath,
+				// paidFilePath, TRUNCATED_OUTPUT_PATH, "400", "40", "500000");
+				runRScriptWithParameters("robustModel.R", freeFilePath, paidFilePath, outputPath, "200", "40", "500000", "1e5", "1e9", "1e2");
 
-			String outputPath = contextBasedName(ROBUST_OUTPUT_PATH, store.a3Code, country.a2Code, type, code.toString());
+				persistCorrelationModelValues(outputPath, store, country, form, code);
 
-			// runRScriptWithParameters("model.R", freeFilePath,
-			// paidFilePath, TRUNCATED_OUTPUT_PATH, "400", "40", "500000");
-			runRScriptWithParameters("robustModel.R", freeFilePath, paidFilePath, outputPath, "200", "40", "500000", "1e5", "1e9", "1e2");
+				alterFeedFetchStatus(store, country, category, listTypes, code);
 
-			persistCorrelationModelValues(outputPath, store, country, modeller.getForm(type), code);
+				// deleteFile(TRUNCATED_OUTPUT_PATH);
+				deleteFile(outputPath);
 
-			alterFeedFetchStatus(store, country, category, listTypes, code);
+				deleteFile(freeFilePath);
+				deleteFile(DoneHelper.getDoneFileName(freeFilePath));
 
-			// deleteFile(TRUNCATED_OUTPUT_PATH);
-			deleteFile(outputPath);
+				deleteFile(paidFilePath);
+				deleteFile(DoneHelper.getDoneFileName(paidFilePath));
+			} else {
+				String inputFilePath = createSimpleInputFile(store, country, category, listType, listTypes, code);
 
-			deleteFile(freeFilePath);
-			deleteFile(DoneHelper.getDoneFileName(freeFilePath));
+				String salesInputFilePath = createDeveloperDataSummary(store, country, category, form, code);
 
-			deleteFile(paidFilePath);
-			deleteFile(DoneHelper.getDoneFileName(paidFilePath));
+				String outputPath = contextBasedName(SIMPLE_OUTPUT_PATH, store.a3Code, country.a2Code, category.id.toString(), form.toString(), code.toString());
+
+				runRScriptWithParameters("simpleModel.R", inputFilePath, salesInputFilePath, outputPath);
+
+				// FIXME: this will not work because because ListTypeType are incompatible with listTypes and listType
+				persistSimpleModelValues(outputPath, store, country, category, form, ListTypeType.fromString(listType), code);
+
+				alterFeedFetchStatus(store, country, category, listTypes, code);
+
+				deleteFile(outputPath);
+
+				deleteFile(inputFilePath);
+				deleteFile(DoneHelper.getDoneFileName(inputFilePath));
+
+				deleteFile(salesInputFilePath);
+				deleteFile(DoneHelper.getDoneFileName(salesInputFilePath));
+			}
 
 			success = true;
 		} catch (Exception e) {
 			LOGGER.error("Error running script", e);
-			LOGGER.error(String.format("Error occured calculating values with parameters store [%s], country [%s], type [%s], [%s]", store, country, type,
+			LOGGER.error(String.format("Error occured calculating values with parameters store [%s], country [%s], type [%s], [%s]", store, country, listType,
 					code == null ? "null" : code.toString()), e);
 		}
 
@@ -657,91 +679,111 @@ public class Program {
 		return inputFilePath;
 	}
 
-	private String createSimpleInputFile(String store, String country, String type, Long categoryId, String listType, List<String> listTypes, Date startDate,
-			Date endDate, Long code) throws IOException, DataAccessException {
+	private static String createSimpleInputFile(Store store, Country country, Category category, String listType, List<String> listTypes, Long code)
+			throws IOException, DataAccessException {
 
-		String inputFilePath = contextBasedName(listType, store, country, type, categoryId == null ? Long.toString(24) : categoryId.toString()) + ".csv";
-
-		FileWriter writer = null;
-
-		String typesQueryPart = null;
-		if (listTypes.size() == 1) {
-			typesQueryPart = String.format("`type`='%s'", listTypes.get(0));
-		} else {
-			typesQueryPart = "`type` IN ('" + StringUtils.join(listTypes, "','") + "')";
-		}
-
-		String query = String.format(
-				"SELECT `itemid`, `date`, %s as `position`, `price` FROM `rank` WHERE %s `country`='%s' AND `categoryid`=%d AND `source`='%s' AND %s",
-				isDownloadListType(listType) ? "`position`" : "`grossingposition`", beforeAfterQuery("`date`", endDate, startDate), country,
-				categoryId == null ? 24 : categoryId.longValue(), store, typesQueryPart);
-
-		Connection connection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeRank.toString());
-
-		Map<String, Rank> itemIdRank = new HashMap<String, Rank>();
+		String inputFilePath = contextBasedName(listType, store.a3Code, country.a2Code, category == null || category.id == null ? Long.toString(24)
+				: category.id.toString(), code.toString())
+				+ ".csv";
 		boolean createFile = false;
 
-		try {
-			connection.connect();
-			connection.executeQuery(query.toString());
-
-			Rank rank;
-			String itemId;
-			Integer position;
-
-			while (connection.fetchNextRow()) {
-				if ((position = connection.getCurrentRowInteger("position")).intValue() == 0) continue;
-
-				itemId = connection.getCurrentRowString("itemid");
-
-				if ((rank = itemIdRank.get(itemId)) == null) {
-					rank = new Rank();
-
-					rank.itemId = itemId;
-					rank.position = position;
-					rank.price = Float.valueOf((float) connection.getCurrentRowInteger("price").intValue() / 100.0f);
-
-					itemIdRank.put(itemId, rank);
-				} else {
-					if (rank.position.intValue() > position.intValue()) {
-						rank.position = position;
-					}
-				}
+		if (new File(inputFilePath).exists()) {
+			if (new File(DoneHelper.getDoneFileName(inputFilePath)).exists()) {
+				// do nothing
+			} else {
+				deleteFile(inputFilePath);
+				createFile = true;
+			}
+		} else {
+			if (new File(DoneHelper.getDoneFileName(inputFilePath)).exists()) {
+				deleteFile(DoneHelper.getDoneFileName(inputFilePath));
 			}
 
 			createFile = true;
-		} finally {
-			if (connection != null) {
-				connection.disconnect();
-			}
 		}
 
 		if (createFile) {
+			FileWriter writer = null;
+
+			String typesQueryPart = null;
+			if (listTypes.size() == 1) {
+				typesQueryPart = String.format("`type`='%s'", listTypes.get(0));
+			} else {
+				typesQueryPart = "`type` IN ('" + StringUtils.join(listTypes, "','") + "')";
+			}
+
+			String query = String
+					.format("SELECT `itemid`, `date`, %s as `position`, `price` FROM `rank` WHERE `code2`=%d AND `country`='%s' AND `categoryid`=%d AND `source`='%s' AND %s",
+							isDownloadListType(listType) ? "`position`" : "`grossingposition`", code.longValue(), country.a2Code, category == null
+									|| category.id == null ? 24 : category.id.longValue(), store.a3Code, typesQueryPart);
+
+			Connection connection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeRank.toString());
+
+			Map<String, Rank> itemIdRank = new HashMap<String, Rank>();
+			boolean gotAllRows = false;
+
 			try {
-				writer = new FileWriter(inputFilePath);
+				connection.connect();
+				connection.executeQuery(query.toString());
 
-				writer.append("#item id,position,price,usesiap");
+				Rank rank;
+				String itemId;
+				Integer position;
 
-				for (Rank current : itemIdRank.values()) {
-					writer.append("\n");
+				while (connection.fetchNextRow()) {
+					if ((position = connection.getCurrentRowInteger("position")).intValue() == 0) continue;
 
-					writer.append("\"");
+					itemId = connection.getCurrentRowString("itemid");
 
-					writer.append(current.itemId);
-					writer.append("\",");
+					if ((rank = itemIdRank.get(itemId)) == null) {
+						rank = new Rank();
 
-					writer.append(current.position.toString());
-					writer.append(",");
+						rank.itemId = itemId;
+						rank.position = position;
+						rank.price = Float.valueOf((float) connection.getCurrentRowInteger("price").intValue() / 100.0f);
 
-					writer.append(current.price.toString());
-					writer.append(",");
-
-					String usesIap = lookupItemIap(current.itemId);
-					writer.append(usesIap);
+						itemIdRank.put(itemId, rank);
+					} else {
+						if (rank.position.intValue() > position.intValue()) {
+							rank.position = position;
+						}
+					}
 				}
+
+				gotAllRows = true;
 			} finally {
-				if (writer != null) {
-					writer.close();
+				if (connection != null) {
+					connection.disconnect();
+				}
+			}
+
+			if (gotAllRows) {
+				try {
+					writer = new FileWriter(inputFilePath);
+
+					writer.append("#item id,position,price,usesiap");
+
+					for (Rank current : itemIdRank.values()) {
+						writer.append("\n");
+
+						writer.append("\"");
+
+						writer.append(current.itemId);
+						writer.append("\",");
+
+						writer.append(current.position.toString());
+						writer.append(",");
+
+						writer.append(current.price.toString());
+						writer.append(",");
+
+						String usesIap = lookupItemIap(current.itemId);
+						writer.append(usesIap);
+					}
+				} finally {
+					if (writer != null) {
+						writer.close();
+					}
 				}
 			}
 		}
@@ -749,17 +791,25 @@ public class Program {
 		return inputFilePath;
 	}
 
-	public String createDeveloperDataSummary(String store, String country, String type, Date startDate, Date endDate, Long categoryId) throws IOException,
+	private static String createDeveloperDataSummary(Store store, Country country, Category category, FormType form, Long code) throws IOException,
 			DataAccessException {
-		String inputFilePath = contextBasedName("sale", store, country, type, categoryId == null ? Long.toString(24) : categoryId.toString()) + ".csv";
+		String inputFilePath = contextBasedName("sale", store.a3Code, country.a2Code, form.toString(),
+				category == null || category.id == null ? Long.toString(24) : category.id.toString(), code.toString())
+				+ ".csv";
 
 		FileWriter writer = null;
 		boolean createFile = false;
 
 		// ios has a datasource itunes connect
-		String dataSourceA3Code = "ios".equals(store) ? "itc" : "*** error ***";
+		String dataSourceA3Code = DataTypeHelper.IOS_STORE_A3.equals(store) ? "itc" : "*** error ***";
 
-		Category category = CategoryServiceProvider.provide().getCategory(categoryId);
+		if (category.name == null) {
+			category = CategoryServiceProvider.provide().getCategory(category.id);
+		}
+
+		// TODO: simple model runs should directly map to
+		// Date startDate = FeedFetchServiceProvider.provide().getGatherCodeFeedFetches(country, store, listtypes, code);
+		Date startDate = null, endDate = null;
 
 		String query = String
 				.format("SELECT `itemid`,`sku`,`typeidentifier`,`units`,`customerprice`,`parentidentifier` FROM `sale` JOIN `dataaccount` on `dataaccount`.`id`=`dataaccountid` JOIN `datasource` ON `sourceid`=`datasource`.`id` WHERE `datasource`.`a3code`= '%s' AND %s %s `country`='%s'",
@@ -789,11 +839,11 @@ public class Program {
 				sale.parentIdentifier = stripslashes(connection.getCurrentRowString("parentidentifier"));
 
 				if (FREE_OR_PAID_APP_UNIVERSAL_IOS.equals(sale.typeIdentifier) || UPDATE_UNIVERSAL_IOS.equals(sale.typeIdentifier)
-						|| ("other".equals(type) && (FREE_OR_PAID_APP_IPHONE_AND_IPOD_TOUCH_IOS.equals(sale.typeIdentifier)))
-						|| ("other".equals(type) && (UPDATE_IPHONE_AND_IPOD_TOUCH_IOS.equals(sale.typeIdentifier)))
-						|| ("tablet".equals(type) && (FREE_OR_PAID_APP_IPAD_IOS.equals(sale.typeIdentifier)))
-						|| ("tablet".equals(type) && (UPDATE_IPAD_IOS.equals(sale.typeIdentifier))) || INAPP_PURCHASE_PURCHASE_IOS.equals(sale.typeIdentifier)
-						|| INAPP_PURCHASE_SUBSCRIPTION_IOS.equals(sale.typeIdentifier)) {
+						|| (FormType.FormTypeOther == form && (FREE_OR_PAID_APP_IPHONE_AND_IPOD_TOUCH_IOS.equals(sale.typeIdentifier)))
+						|| (FormType.FormTypeOther == form && (UPDATE_IPHONE_AND_IPOD_TOUCH_IOS.equals(sale.typeIdentifier)))
+						|| (FormType.FormTypeTablet == form && (FREE_OR_PAID_APP_IPAD_IOS.equals(sale.typeIdentifier)))
+						|| (FormType.FormTypeTablet == form && (UPDATE_IPAD_IOS.equals(sale.typeIdentifier)))
+						|| INAPP_PURCHASE_PURCHASE_IOS.equals(sale.typeIdentifier) || INAPP_PURCHASE_SUBSCRIPTION_IOS.equals(sale.typeIdentifier)) {
 					sales.add(sale);
 				}
 
@@ -1075,30 +1125,31 @@ public class Program {
 	}
 
 	private static void persistSimpleModelValues(String resultsFileName, Store store, Country country, Category category, FormType form, ListTypeType listType,
-			Date date, Long code) throws IOException, DataAccessException {
+			Long code) throws IOException, DataAccessException {
 		Map<String, String> results = parseOutputFile(resultsFileName);
 
 		SimpleModelRun run = SimpleModelRunServiceProvider.provide().getGatherCodeSimpleModelRun(country, store, category, form, listType, code);
-		
+
 		boolean isUpdate = false;
-		
+
 		if (run == null) {
 			run = new SimpleModelRun();
 		} else {
 			isUpdate = false;
 		}
-		
+
 		if (!isUpdate) {
 			run.country = country.a2Code;
 			run.store = country.a3Code;
 			run.category = category;
 			run.form = form;
 			run.listType = listType;
+			// TODO: run.code
 		}
-		
+
 		run.a = Double.valueOf(results.get(A_OUTPUT));
 		run.b = Double.valueOf(results.get(B_OUTPUT));
-		
+
 		if (isUpdate) {
 			SimpleModelRunServiceProvider.provide().updateSimpleModelRun(run);
 		} else {
@@ -1141,7 +1192,7 @@ public class Program {
 		return parsedVariables;
 	}
 
-	protected boolean isDownloadListType(String listType) {
+	protected static boolean isDownloadListType(String listType) {
 		return !listType.contains("grossing");
 	}
 
