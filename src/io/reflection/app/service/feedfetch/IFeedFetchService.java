@@ -139,10 +139,9 @@ public interface IFeedFetchService extends IService {
 	 * @throws DataAccessException
 	 */
 	public Long getCode() throws DataAccessException;
-
+	
 	/**
 	 * Gets the gather for the feed fetch
-	 * 
 	 * @param country
 	 * @param store
 	 * @param after
@@ -151,7 +150,7 @@ public interface IFeedFetchService extends IService {
 	 * @throws DataAccessException
 	 */
 	public Long getGatherCode(Country country, Store store, Date after, Date before) throws DataAccessException;
-
+	
 	/**
 	 * 
 	 * @param country
