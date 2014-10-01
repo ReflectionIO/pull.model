@@ -849,8 +849,7 @@ public class Program {
 
 			String query = String
 					.format("SELECT `itemid`,`sku`,`typeidentifier`,`units`,`customerprice`,`parentidentifier` FROM `sale` JOIN `dataaccount` on `dataaccount`.`id`=`dataaccountid` JOIN `datasource` ON `sourceid`=`datasource`.`id` WHERE `datasource`.`a3code`= '%s' AND %s %s `country`='%s'",
-							dataSourceA3Code, beforeAfterQuery("`begin`", endDate, startDate), category == null || category.name == null || category.id == null
-									|| category.id.longValue() == 24l ? "" : " `category`='" + category.name + "' AND", country.a2Code);
+							dataSourceA3Code, beforeAfterQuery("`begin`", endDate, startDate), country.a2Code);
 
 			Connection connection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeSale.toString());
 
@@ -1006,6 +1005,8 @@ public class Program {
 
 		if (exitVal != 0) {
 			LOGGER.error("Exited with error code " + exitVal);
+
+			throw new RuntimeException("Script " + name + " failed with exit code " + exitVal);
 		} else {
 			LOGGER.info("Exited with error code " + exitVal);
 		}
