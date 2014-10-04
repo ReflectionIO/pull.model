@@ -21,7 +21,7 @@ import static io.reflection.pullmodel.SystemConfigurator.APPLICATION_NAME_KEY;
 import static io.reflection.pullmodel.SystemConfigurator.DATA_STORE_NAME_KEY;
 import static io.reflection.pullmodel.SystemConfigurator.MODEL_QUEUE_NAME_KEY;
 import static io.reflection.pullmodel.SystemConfigurator.PROJECT_NAME_KEY;
-import static io.reflection.pullmodel.SystemConfigurator.SECRET_FILE_NAME_KEY;
+import static io.reflection.pullmodel.SystemConfigurator.*;
 import io.reflection.app.api.admin.shared.call.TriggerPredictRequest;
 import io.reflection.app.api.admin.shared.call.TriggerPredictResponse;
 import io.reflection.app.api.core.shared.call.LoginRequest;
@@ -284,15 +284,26 @@ public class Program {
 							LOGGER.info("Deleting successfully complete model task");
 							deleteTask(taskQueueApi, leasedTask, System.getProperty(MODEL_QUEUE_NAME_KEY));
 						} catch (Throwable caught) {
-							LOGGER.error("Could not complete model task - expiring lease", caught);
-							expireTaskLease(taskQueueApi, leasedTask, System.getProperty(MODEL_QUEUE_NAME_KEY));
+							LOGGER.error("Completed model task but failed to trigger predict api", caught);
+							expireTaskUnlessExhaustedRetries(taskQueueApi, leasedTask, System.getProperty(MODEL_QUEUE_NAME_KEY));
 						}
 					} else {
 						LOGGER.error("Could not complete model task");
-						expireTaskLease(taskQueueApi, leasedTask, System.getProperty(MODEL_QUEUE_NAME_KEY));
+						expireTaskUnlessExhaustedRetries(taskQueueApi, leasedTask, System.getProperty(MODEL_QUEUE_NAME_KEY));
 					}
 				}
 			}
+		}
+	}
+
+	private static void expireTaskUnlessExhaustedRetries(Taskqueue taskQueue, Task task, String taskQueueName) throws IOException {
+		Integer retryCount = Integer.valueOf(System.getProperty(TASK_RETRY_COUNT_KEY));
+		if (task.getRetryCount() > retryCount.intValue()) {
+			LOGGER.info("Deleting task because it [" + task.getRetryCount().toString() + "] has exceeded allowed retry count [" + retryCount.toString() + "]");
+			deleteTask(taskQueue, task, System.getProperty(MODEL_QUEUE_NAME_KEY));
+		} else {
+			LOGGER.info("Expiring lease");
+			expireTaskLease(taskQueue, task, System.getProperty(MODEL_QUEUE_NAME_KEY));
 		}
 	}
 
@@ -522,7 +533,6 @@ public class Program {
 				runRScriptWithParameters("robustModel.R", freeFilePath, paidFilePath, outputPath, "200", "40", "500000", "1e5", "1e9", "1e2");
 
 				persistCorrelationModelValues(outputPath, store, country, form, code);
-
 				alterFeedFetchStatus(store, country, category, listTypes, code);
 
 				// deleteFile(TRUNCATED_OUTPUT_PATH);
@@ -559,7 +569,7 @@ public class Program {
 
 			success = true;
 		} catch (Exception e) {
-			LOGGER.error("Error running script", e);
+			// LOGGER.error("Error running script", e);
 			LOGGER.error(String.format("Error occured calculating values with parameters store [%s], country [%s], type [%s], [%s]", store, country, listType,
 					code == null ? "null" : code.toString()), e);
 		}
@@ -848,7 +858,8 @@ public class Program {
 			startDate = cal.getTime();
 
 			String query = String
-					.format("SELECT `itemid`,`sku`,`typeidentifier`,`units`,`customerprice`,`parentidentifier` FROM `sale` JOIN `dataaccount` on `dataaccount`.`id`=`dataaccountid` JOIN `datasource` ON `sourceid`=`datasource`.`id` WHERE `datasource`.`a3code`= '%s' AND %s %s `country`='%s'",
+					.format("SELECT `itemid`,`sku`,`typeidentifier`,`units`,`customerprice`,`parentidentifier` FROM `sale` JOIN `dataaccount` on "
+							+ "`dataaccount`.`id`=`dataaccountid` JOIN `datasource` ON `sourceid`=`datasource`.`id` WHERE `datasource`.`a3code`='%s' AND %s `country`='%s'",
 							dataSourceA3Code, beforeAfterQuery("`begin`", endDate, startDate), country.a2Code);
 
 			Connection connection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeSale.toString());
@@ -1022,6 +1033,7 @@ public class Program {
 	private static void expireTaskLease(Taskqueue taskQueue, Task task, String taskQueueName) throws IOException {
 		// this is a workaround for an issue with the task queue api
 		task.setQueueName(taskQueueName);
+		task.setRetryCount(Integer.valueOf(task.getRetryCount().intValue() + 1));
 		Taskqueue.Tasks.Update request = taskQueue.tasks().update("s~" + System.getProperty(PROJECT_NAME_KEY), taskQueueName, task.getId(), Integer.valueOf(1),
 				task);
 		request.execute();
@@ -1122,13 +1134,15 @@ public class Program {
 	}
 
 	/**
-	 * @param code
-	 * @param listTypes
-	 * @param country
+	 * Persist correlation model values
+	 * 
+	 * @param resultsFileName
 	 * @param store
+	 * @param country
+	 * @param form
+	 * @param code
 	 * @throws DataAccessException
 	 * @throws IOException
-	 * 
 	 */
 	private static void persistCorrelationModelValues(String resultsFileName, Store store, Country country, FormType form, Long code)
 			throws DataAccessException, IOException {
@@ -1170,7 +1184,15 @@ public class Program {
 		}
 	}
 
-	private static void persistSimpleModelValues(String resultsFileName, FeedFetch feedFetch) throws IOException, DataAccessException {
+	/**
+	 * Persist simple model values
+	 * 
+	 * @param resultsFileName
+	 * @param feedFetch
+	 * @throws DataAccessException
+	 * @throws IOException
+	 */
+	private static void persistSimpleModelValues(String resultsFileName, FeedFetch feedFetch) throws DataAccessException, IOException {
 		Map<String, String> results = parseOutputFile(resultsFileName);
 
 		SimpleModelRun run = SimpleModelRunServiceProvider.provide().getFeedFetchSimpleModelRun(feedFetch);
@@ -1195,6 +1217,7 @@ public class Program {
 		} else {
 			SimpleModelRunServiceProvider.provide().addSimpleModelRun(run);
 		}
+
 	}
 
 	private static Map<String, String> parseOutputFile(String fileFullPath) throws IOException {

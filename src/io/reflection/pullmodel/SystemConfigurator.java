@@ -69,6 +69,9 @@ public class SystemConfigurator {
 	public static final String SECRET_FILE_NAME_KEY = "secret.file.name";
 	private static final String SECRET_FILE_NAME_DEFAULT = "config/secret.json";
 
+	public static final String TASK_RETRY_COUNT_KEY = "task.retry.count";
+	public static final String TASK_RETRY_COUNT_DEFAULT = "1";
+
 	/**
 	 * @return
 	 */
@@ -167,6 +170,10 @@ public class SystemConfigurator {
 
 		if (defaultConfig || (propertyValue = System.getProperty(SECRET_FILE_NAME_KEY)) == null || propertyValue.isEmpty()) {
 			System.setProperty(SECRET_FILE_NAME_KEY, SECRET_FILE_NAME_DEFAULT);
+		}
+
+		if (defaultConfig || (propertyValue = System.getProperty(TASK_RETRY_COUNT_KEY)) == null || propertyValue.isEmpty()) {
+			System.setProperty(TASK_RETRY_COUNT_KEY, TASK_RETRY_COUNT_DEFAULT);
 		}
 
 	}
