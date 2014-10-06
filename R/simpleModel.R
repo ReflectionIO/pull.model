@@ -9,7 +9,7 @@ args <- commandArgs(trailingOnly=TRUE)
 # Firstly check these inputs are valid
 pathDataApps <- as.character(args[1])
 pathDataDownARev <- as.character(args[2])
-listType <- as.character(args[3])
+isDownloadList <- as.character(args[3])
 pathOutput <- as.character(args[4])
 
 
@@ -64,7 +64,7 @@ revenues <- mergedFiles$revenue
 # but worth a first implementation
 # If it is free or paid then the below regression should be carried out
 # else it will be on revenue
-if (listType == "free" || listType == "paid"){ simple.model <- lm(log(downloads) ~ log(ranks))} else{ 
+if (isDownloadList == "true"){ simple.model <- lm(log(downloads) ~ log(ranks))} else{ 
   simple.model <- lm(log(revenues) ~ log(ranks))}
 
 
@@ -72,15 +72,15 @@ b <- exp(simple.model$coefficients[c("(Intercept)")])
 a <- -simple.model$coefficients[c("log(ranks)")]
 
 
-# if listType is free or paid then do the calibration
+# if isDownloadList is true then do the calibration
 # on downloads, else do it on revenue
-# if (listType = "free" || listType = "paid")
+# if (isDownloadList == "true")
 #   { cal <- pareto.MLE(downloads)}
 # else
 # {  cal <- pareto.MLE(revenues)}
 
-script.results <- c(a, b, listType)
+script.results <- c(a, b, isDownloadList)
 
 cat(a, b)
 
-write.csv(script.results, pathOutput)
+write.csv( script.results, pathOutput, row.names = c("a","b", "isDownloadList"))

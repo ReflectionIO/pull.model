@@ -21,7 +21,8 @@ import static io.reflection.pullmodel.SystemConfigurator.APPLICATION_NAME_KEY;
 import static io.reflection.pullmodel.SystemConfigurator.DATA_STORE_NAME_KEY;
 import static io.reflection.pullmodel.SystemConfigurator.MODEL_QUEUE_NAME_KEY;
 import static io.reflection.pullmodel.SystemConfigurator.PROJECT_NAME_KEY;
-import static io.reflection.pullmodel.SystemConfigurator.*;
+import static io.reflection.pullmodel.SystemConfigurator.SECRET_FILE_NAME_KEY;
+import static io.reflection.pullmodel.SystemConfigurator.TASK_RETRY_COUNT_KEY;
 import io.reflection.app.api.admin.shared.call.TriggerPredictRequest;
 import io.reflection.app.api.admin.shared.call.TriggerPredictResponse;
 import io.reflection.app.api.core.shared.call.LoginRequest;
@@ -277,9 +278,22 @@ public class Program {
 					Modeller modeller = ModellerFactory.getModellerForStore(store);
 					FormType form = modeller.getForm(listType);
 
-					if (executeModelTask(leasedTask, modelType, s, c, category, form, listType, listTypes, code)) {
+					boolean taskCompleted = false;
+					SimpleModelRun simpleModelRun = null;
+
+					if (modelType == ModelTypeType.ModelTypeTypeCorrelation) {
+						taskCompleted = executeModelTask(leasedTask, modelType, s, c, category, form, listType, listTypes, code);
+					} else if (modelType == ModelTypeType.ModelTypeTypeSimple) {
+						simpleModelRun = executeSimpleModelTask(leasedTask, modelType, s, c, category, form, listType, listTypes, code);
+
+						if (simpleModelRun != null) {
+							taskCompleted = true;
+						}
+					}
+
+					if (taskCompleted) {
 						try {
-							callApiTriggerPredict(modelType, s, c, category, listType, listTypes, code);
+							callApiTriggerPredict(modelType, s, c, category, listType, listTypes, code, simpleModelRun);
 
 							LOGGER.info("Deleting successfully complete model task");
 							deleteTask(taskQueueApi, leasedTask, System.getProperty(MODEL_QUEUE_NAME_KEY));
@@ -308,10 +322,11 @@ public class Program {
 	}
 
 	private static void callApiTriggerPredict(final ModelTypeType modelType, final Store store, final Country country, final Category category,
-			final String listType, final List<String> listTypes, final Long code) throws InterruptedException, ExecutionException {
+			final String listType, final List<String> listTypes, final Long code, final SimpleModelRun simpleModelRun) throws InterruptedException,
+			ExecutionException {
 
 		if (session == null) {
-			callApiLogin(modelType, store, country, category, listType, listTypes, code);
+			callApiLogin(modelType, store, country, category, listType, listTypes, code, simpleModelRun);
 		} else {
 
 			AdminService admin = new AdminService();
@@ -320,11 +335,17 @@ public class Program {
 			final TriggerPredictRequest input = new TriggerPredictRequest();
 			input.accessCode = System.getProperty(SystemConfigurator.CLIENT_API_TOKEN_KEY);
 			input.session = getSessionForApiCall();
-			input.code = code;
-			input.country = country;
-			input.store = store;
-			input.listTypes = listTypes;
-			input.category = category;
+			input.modelType = modelType;
+
+			if (modelType == ModelTypeType.ModelTypeTypeCorrelation) {
+				input.code = code;
+				input.country = country;
+				input.store = store;
+				input.listTypes = listTypes;
+				input.category = category;
+			} else {
+				input.simpleModelRun = simpleModelRun;
+			}
 
 			admin.triggerPredict(input, new JsonService.AsyncCallback<TriggerPredictResponse>() {
 
@@ -343,11 +364,17 @@ public class Program {
 							session = null;
 
 							try {
-								callApiTriggerPredict(modelType, store, country, category, listType, listTypes, code);
+								callApiTriggerPredict(modelType, store, country, category, listType, listTypes, code, simpleModelRun);
 							} catch (Throwable caught) {
 								LOGGER.error("An error occured while calling Api Trigger predict", caught);
 								throw new RuntimeException(caught);
 							}
+						} else {
+							throw new RuntimeException(
+									String.format(
+											"An error occured while calling Api Trigger predictfor store [%s], country [%s], type [%s], code [%d] with error (%s - %s)",
+											output.error.code == null ? "no error code" : output.error.code.toString(),
+											output.error.message == null ? "no error message" : output.error.message));
 						}
 					}
 				}
@@ -376,7 +403,7 @@ public class Program {
 	}
 
 	private static void callApiLogin(final ModelTypeType modelType, final Store store, final Country country, final Category category, final String listType,
-			final List<String> listTypes, final Long code) {
+			final List<String> listTypes, final Long code, final SimpleModelRun simpleModelRun) {
 		CoreService core = new CoreService();
 		core.setUrl(System.getProperty(SystemConfigurator.CORE_SERVICE_URL_KEY));
 
@@ -398,7 +425,7 @@ public class Program {
 							session = output.session;
 
 							try {
-								callApiTriggerPredict(modelType, store, country, category, listType, listTypes, code);
+								callApiTriggerPredict(modelType, store, country, category, listType, listTypes, code, simpleModelRun);
 							} catch (Throwable caught) {
 								LOGGER.error("An error occured while calling Api Trigger predict", caught);
 								throw new RuntimeException(caught);
@@ -507,7 +534,16 @@ public class Program {
 	}
 
 	/**
+	 * 
 	 * @param task
+	 * @param modelType
+	 * @param store
+	 * @param country
+	 * @param category
+	 * @param form
+	 * @param listType
+	 * @param listTypes
+	 * @param code
 	 * @return
 	 * @throws IOException
 	 * @throws URISyntaxException
@@ -522,50 +558,26 @@ public class Program {
 		// RankServiceProvider.provide().getCodeLastRankDate(code);
 
 		try {
-			if (modelType == null || modelType == ModelTypeType.ModelTypeTypeCorrelation) {
-				String freeFilePath = createInputFile(store, country, category, listType, listTypes, code, "`price`=0", "free");
-				String paidFilePath = createInputFile(store, country, category, listType, listTypes, code, "`price`<>0", "paid");
+			String freeFilePath = createInputFile(store, country, category, listType, listTypes, code, "`price`=0", "free");
+			String paidFilePath = createInputFile(store, country, category, listType, listTypes, code, "`price`<>0", "paid");
 
-				String outputPath = contextBasedName(ROBUST_OUTPUT_PATH, store.a3Code, country.a2Code, category.id.toString(), listType, code.toString());
+			String outputPath = contextBasedName(ROBUST_OUTPUT_PATH, store.a3Code, country.a2Code, category.id.toString(), listType, code.toString());
 
-				// runRScriptWithParameters("model.R", freeFilePath,
-				// paidFilePath, TRUNCATED_OUTPUT_PATH, "400", "40", "500000");
-				runRScriptWithParameters("robustModel.R", freeFilePath, paidFilePath, outputPath, "200", "40", "500000", "1e5", "1e9", "1e2");
+			// runRScriptWithParameters("model.R", freeFilePath,
+			// paidFilePath, TRUNCATED_OUTPUT_PATH, "400", "40", "500000");
+			runRScriptWithParameters("robustModel.R", freeFilePath, paidFilePath, outputPath, "200", "40", "500000", "1e5", "1e9", "1e2");
 
-				persistCorrelationModelValues(outputPath, store, country, form, code);
-				alterFeedFetchStatus(store, country, category, listTypes, code);
+			persistCorrelationModelValues(outputPath, store, country, form, code);
+			alterFeedFetchStatus(store, country, category, listTypes, code);
 
-				// deleteFile(TRUNCATED_OUTPUT_PATH);
-				deleteFile(outputPath);
+			// deleteFile(TRUNCATED_OUTPUT_PATH);
+			deleteFile(outputPath);
 
-				deleteFile(freeFilePath);
-				deleteFile(DoneHelper.getDoneFileName(freeFilePath));
+			deleteFile(freeFilePath);
+			deleteFile(DoneHelper.getDoneFileName(freeFilePath));
 
-				deleteFile(paidFilePath);
-				deleteFile(DoneHelper.getDoneFileName(paidFilePath));
-			} else if (modelType == ModelTypeType.ModelTypeTypeSimple) {
-				String inputFilePath = createSimpleInputFile(store, country, category, listType, listTypes, code);
-
-				String salesInputFilePath = createDeveloperDataSummary(store, country, category, form, listType, code);
-
-				String outputPath = contextBasedName(SIMPLE_OUTPUT_PATH, store.a3Code, country.a2Code, category.id.toString(), form.toString(), code.toString());
-
-				runRScriptWithParameters("simpleModel.R", inputFilePath, salesInputFilePath, outputPath);
-
-				FeedFetch feedFetch = FeedFetchServiceProvider.provide().getListTypeCodeFeedFetch(country, store, category, listType, code);
-
-				persistSimpleModelValues(outputPath, feedFetch);
-
-				alterFeedFetchStatus(feedFetch);
-
-				deleteFile(outputPath);
-
-				deleteFile(inputFilePath);
-				deleteFile(DoneHelper.getDoneFileName(inputFilePath));
-
-				deleteFile(salesInputFilePath);
-				deleteFile(DoneHelper.getDoneFileName(salesInputFilePath));
-			}
+			deleteFile(paidFilePath);
+			deleteFile(DoneHelper.getDoneFileName(paidFilePath));
 
 			success = true;
 		} catch (Exception e) {
@@ -575,6 +587,65 @@ public class Program {
 		}
 
 		return success;
+	}
+
+	/**
+	 * 
+	 * @param task
+	 * @param modelType
+	 * @param store
+	 * @param country
+	 * @param category
+	 * @param form
+	 * @param listType
+	 * @param listTypes
+	 * @param code
+	 * @return
+	 * @throws IOException
+	 * @throws URISyntaxException
+	 * @throws DataAccessException
+	 */
+	private static SimpleModelRun executeSimpleModelTask(Task task, ModelTypeType modelType, Store store, Country country, Category category, FormType form,
+			String listType, List<String> listTypes, Long code) throws IOException, URISyntaxException, DataAccessException {
+
+		SimpleModelRun simpleModelRun = null;
+		boolean success = false;
+
+		// Date date =
+		// RankServiceProvider.provide().getCodeLastRankDate(code);
+
+		try {
+			String inputFilePath = createSimpleInputFile(store, country, category, listType, listTypes, code);
+
+			String salesInputFilePath = createDeveloperDataSummary(store, country, category, form, listType, code);
+
+			String outputPath = contextBasedName(SIMPLE_OUTPUT_PATH, store.a3Code, country.a2Code, category.id.toString(), form.toString(), code.toString());
+
+			runRScriptWithParameters("simpleModel.R", inputFilePath, salesInputFilePath, Boolean.toString(isDownloadListType(listType)), outputPath);
+
+			FeedFetch feedFetch = FeedFetchServiceProvider.provide().getListTypeCodeFeedFetch(country, store, category, listType, code);
+
+			simpleModelRun = persistSimpleModelValues(outputPath, feedFetch);
+
+			alterFeedFetchStatus(feedFetch);
+
+			deleteFile(outputPath);
+
+			deleteFile(inputFilePath);
+			deleteFile(DoneHelper.getDoneFileName(inputFilePath));
+
+			deleteFile(salesInputFilePath);
+			deleteFile(DoneHelper.getDoneFileName(salesInputFilePath));
+
+			success = true;
+
+		} catch (Exception e) {
+			// LOGGER.error("Error running script", e);
+			LOGGER.error(String.format("Error occured calculating values with parameters store [%s], country [%s], type [%s], [%s]", store, country, listType,
+					code == null ? "null" : code.toString()), e);
+		}
+
+		return success ? simpleModelRun : null;
 	}
 
 	/**
@@ -1192,7 +1263,7 @@ public class Program {
 	 * @throws DataAccessException
 	 * @throws IOException
 	 */
-	private static void persistSimpleModelValues(String resultsFileName, FeedFetch feedFetch) throws DataAccessException, IOException {
+	private static SimpleModelRun persistSimpleModelValues(String resultsFileName, FeedFetch feedFetch) throws DataAccessException, IOException {
 		Map<String, String> results = parseOutputFile(resultsFileName);
 
 		SimpleModelRun run = SimpleModelRunServiceProvider.provide().getFeedFetchSimpleModelRun(feedFetch);
@@ -1213,10 +1284,12 @@ public class Program {
 		run.b = Double.valueOf(results.get(B_OUTPUT));
 
 		if (isUpdate) {
-			SimpleModelRunServiceProvider.provide().updateSimpleModelRun(run);
+			run = SimpleModelRunServiceProvider.provide().updateSimpleModelRun(run);
 		} else {
-			SimpleModelRunServiceProvider.provide().addSimpleModelRun(run);
+			run = SimpleModelRunServiceProvider.provide().addSimpleModelRun(run);
 		}
+
+		return run;
 
 	}
 
@@ -1234,7 +1307,7 @@ public class Program {
 
 				if (splitLine != null && splitLine.length == 2) {
 					if ((parameterName = splitLine[0].replace("\"", "")).length() != 0) {
-						parsedVariables.put(parameterName, splitLine[1]);
+						parsedVariables.put(parameterName, splitLine[1].replace("\"", ""));
 					}
 				}
 			}

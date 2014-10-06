@@ -60,7 +60,7 @@ final class SimpleModelRunService implements ISimpleModelRunService {
 		simpleModelRun.deleted = connection.getCurrentRowString("deleted");
 
 		simpleModelRun.feedFetch = new FeedFetch();
-		simpleModelRun.feedFetch.id = connection.getCurrentRowLong("country");
+		simpleModelRun.feedFetch.id = connection.getCurrentRowLong("feedfetchid");
 
 		simpleModelRun.a = connection.getCurrentRowDouble("a");
 		simpleModelRun.b = connection.getCurrentRowDouble("b");
