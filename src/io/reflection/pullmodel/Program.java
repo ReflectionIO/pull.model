@@ -126,6 +126,7 @@ public class Program {
 	private static int IS_COMPUTE_ENGINE_ARG_INDEX = 0;
 	private static int LEASE_SECONDS_ARG_INDEX = 1;
 	private static int LEASE_COUNT_ARG_INDEX = 2;
+	private static int LOGGER_CONFIG_ARG_INDEX = 3;
 
 	private static FileDataStoreFactory dataStoreFactory;
 	private static HttpTransport httpTransport;
@@ -164,7 +165,7 @@ public class Program {
 
 	public static void main(String[] args) throws Exception {
 
-		SystemConfigurator.get().configure();
+		SystemConfigurator.get().configure(args.length > LOGGER_CONFIG_ARG_INDEX ? args[LOGGER_CONFIG_ARG_INDEX] : null);
 
 		parseParams(args);
 
@@ -373,8 +374,8 @@ public class Program {
 							throw new RuntimeException(
 									String.format(
 											"An error occured while calling Api Trigger predictfor store [%s], country [%s], type [%s], code [%d] with error (%s - %s)",
-											output.error.code == null ? "no error code" : output.error.code.toString(),
-											output.error.message == null ? "no error message" : output.error.message));
+											store.a3Code, country.a2Code, listType, code.longValue(), output.error.code == null ? "no error code"
+													: output.error.code.toString(), output.error.message == null ? "no error message" : output.error.message));
 						}
 					}
 				}

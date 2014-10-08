@@ -27,7 +27,7 @@ public class SystemConfigurator {
 
 	private static SystemConfigurator one;
 
-	private static final String LOGGER_CONFIG_PATH = "./Logger.xml";
+	private static final String LOGGER_CONFIG_PATH = "Logger.xml";
 	private static final Logger LOGGER = LoggerFactory.getLogger(SystemConfigurator.class);
 
 	private static final String CONFIG_FILE_PATH_KEY = "io.reflection.pullmodel.config.file";
@@ -83,11 +83,15 @@ public class SystemConfigurator {
 		return one;
 	}
 
-	public void configure() {
+	public void configure(String loggerPath) {
 		SLF4JBridgeHandler.removeHandlersForRootLogger();
 		SLF4JBridgeHandler.install();
 
-		DOMConfigurator.configure(LOGGER_CONFIG_PATH);
+		if (loggerPath == null || "".equals(loggerPath.trim())) {
+			DOMConfigurator.configure(LOGGER_CONFIG_PATH);
+		} else {
+			DOMConfigurator.configure(loggerPath);
+		}
 
 		String configFile = System.getProperty(CONFIG_FILE_PATH_KEY);
 
