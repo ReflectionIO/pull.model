@@ -59,6 +59,12 @@ ranks <- mergedFiles$position
 downloads <- mergedFiles$downloads
 revenues <- mergedFiles$revenue
 
+# Need an exit here if there is no data
+if(is.na(ranks) || is.null(ranks))
+{
+  # Exit with error code 1
+  q("no", 1, FALSE)
+}
 
 # A very simple non-linear regression that is inaccurate
 # but worth a first implementation
