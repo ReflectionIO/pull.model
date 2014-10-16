@@ -43,6 +43,8 @@ pareto.MLE <- function(X)
 mergedFiles <- NULL
 mergedFiles <- merge(realDataApps, realDataDownARev, by="X.item.id")
 
+if(nrow(mergedFiles)==0)
+{stop("There are no common rows between sales and rank data")}
 
 #Need a check in here for negatives and missing data
 #mergedFiles$X.item.id = as.numeric(! mergedFiles$X.item.id == "")
@@ -61,10 +63,9 @@ revenues <- mergedFiles$revenue
 
 # Need an exit here if there is no data
 if(is.na(ranks) || is.null(ranks))
-{
-  # Exit with error code 1
-  q("no", 1, FALSE)
-}
+{stop("Ranks list is either na or null")}
+
+
 
 # A very simple non-linear regression that is inaccurate
 # but worth a first implementation
@@ -87,6 +88,6 @@ a <- -simple.model$coefficients[c("log(ranks)")]
 
 script.results <- c(a, b, isDownloadList)
 
-cat(a, b)
+cat(script.results)
 
 write.csv( script.results, pathOutput, row.names = c("a","b", "isDownloadList"))
