@@ -318,7 +318,11 @@ public class Program {
 			deleteTask(taskQueue, task, System.getProperty(MODEL_QUEUE_NAME_KEY));
 		} else {
 			LOGGER.info("Expiring lease");
-			expireTaskLease(taskQueue, task, System.getProperty(MODEL_QUEUE_NAME_KEY));
+			try {
+				expireTaskLease(taskQueue, task, System.getProperty(MODEL_QUEUE_NAME_KEY));
+			} catch (Exception e) {
+				LOGGER.error("Failed to expire lease, but moving on", e);
+			}
 		}
 	}
 
