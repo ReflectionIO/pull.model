@@ -246,15 +246,42 @@ public class Program {
 						}
 					}
 
-					String store = mappedParams.get("store");
-					String country = mappedParams.get("country");
-					String categoryIdParam = mappedParams.get("categoryid");
-					Long categoryId = categoryIdParam == null ? null : Long.valueOf(categoryIdParam);
-					String listType = mappedParams.get("type");
+					String feedFetchIdParam = mappedParams.get("fetchid");
+					Long feedFetchId = feedFetchIdParam == null ? null : Long.valueOf(feedFetchIdParam);
+
 					String modelTypeParam = mappedParams.get("modeltype");
-					String codeParam = mappedParams.get("code");
-					Long code = codeParam == null ? null : Long.valueOf(codeParam);
 					ModelTypeType modelType = modelTypeParam == null ? null : ModelTypeType.fromString(modelTypeParam);
+
+					String store = null;
+					String country = null;
+					Long categoryId = null;
+					String listType = null;
+					Long code = null;
+
+					if (feedFetchId == null) {
+						store = mappedParams.get("store");
+						country = mappedParams.get("country");
+						
+						String categoryIdParam = mappedParams.get("categoryid");
+						categoryId = categoryIdParam == null ? null : Long.valueOf(categoryIdParam);
+						
+						listType = mappedParams.get("type");
+
+						String codeParam = mappedParams.get("code");
+						code = codeParam == null ? null : Long.valueOf(codeParam);
+					} else {
+						FeedFetch feedFetch = FeedFetchServiceProvider.provide().getFeedFetch(feedFetchId);
+
+						if (feedFetch != null) {
+							store = feedFetch.store;
+							country = feedFetch.country;
+							
+							categoryId = feedFetch.category.id;
+							
+							listType = feedFetch.type;
+							code = feedFetch.code;
+						}
+					}
 
 					Country c = new Country();
 					c.a2Code = country;
