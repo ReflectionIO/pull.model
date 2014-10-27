@@ -962,8 +962,8 @@ public class Program {
 
 			String query = String
 					.format("SELECT `itemid`,`sku`,`typeidentifier`,`units`,`customerprice`,`parentidentifier` FROM `sale` JOIN `dataaccount` on "
-							+ "`dataaccount`.`id`=`dataaccountid` JOIN `datasource` ON `sourceid`=`datasource`.`id` WHERE `datasource`.`a3code`='%s' AND %s `country`='%s'",
-							dataSourceA3Code, beforeAfterQuery("`begin`", endDate, startDate), country.a2Code);
+							+ "`dataaccount`.`id`=`dataaccountid` JOIN `datasource` ON `sourceid`=`datasource`.`id` WHERE `datasource`.`a3code`='%s' AND %s AND `country`='%s'",
+							dataSourceA3Code, beforeAfterQuery(endDate, startDate, "begin"), country.a2Code);
 
 			Connection connection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeSale.toString());
 

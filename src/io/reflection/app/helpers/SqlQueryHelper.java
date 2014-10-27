@@ -16,35 +16,46 @@ import java.util.Date;
 public class SqlQueryHelper {
 
 	/**
+	 * 
 	 * @param before
 	 * @param after
+	 * @param dateName
 	 * @return
 	 */
-	public static String beforeAfterQuery(String field, Date before, Date after) {
+	public static String beforeAfterQuery(Date before, Date after, String dateName) {
 		StringBuffer buffer = new StringBuffer();
 
+		if (before != null) {
+			before.setTime(before.getTime() + 86399999); // Add 1 day - 1 ms to before
+		}
+
 		if (before != null && after != null) {
-			buffer.append("(");
-			buffer.append(field);
-			buffer.append(" BETWEEN FROM_UNIXTIME(");
+			buffer.append("(`" + dateName + "` BETWEEN FROM_UNIXTIME(");
 			buffer.append(after.getTime() / 1000);
 			buffer.append(") AND FROM_UNIXTIME(");
 			buffer.append(before.getTime() / 1000);
-			buffer.append(")) AND ");
+			buffer.append("))");
 		} else if (after != null && before == null) {
-			buffer.append("(");
-			buffer.append(field);
-			buffer.append(">=FROM_UNIXTIME(");
+			buffer.append("`" + dateName + "`>=FROM_UNIXTIME(");
 			buffer.append(after.getTime() / 1000);
-			buffer.append(") AND ");
+			buffer.append(")");
 		} else if (before != null && after == null) {
-			buffer.append("(");
-			buffer.append(field);
-			buffer.append("<FROM_UNIXTIME(");
+			buffer.append("`" + dateName + "`<FROM_UNIXTIME(");
 			buffer.append(before.getTime() / 1000);
-			buffer.append(") AND ");
+			buffer.append(")");
 		}
 
 		return buffer.toString();
 	}
+
+	/**
+	 * 
+	 * @param before
+	 * @param after
+	 * @return
+	 */
+	public static String beforeAfterQuery(Date before, Date after) {
+		return beforeAfterQuery(before, after, "date");
+	}
+
 }

@@ -551,8 +551,8 @@ final class FeedFetchService implements IFeedFetchService {
 			try {
 				feedFetchConnection.connect();
 				String getGatherCode = String
-						.format("SELECT `code2` FROM `feedfetch` WHERE CAST(`country` AS BINARY)=CAST('%s' AS BINARY) AND CAST(`store` AS BINARY)=CAST('%s' AS BINARY) AND %s `deleted`='n' ORDER BY `date` DESC LIMIT 1",
-								addslashes(country.a2Code), addslashes(store.a3Code), beforeAfterQuery("`date`", before, after));
+						.format("SELECT `code2` FROM `feedfetch` WHERE CAST(`country` AS BINARY)=CAST('%s' AS BINARY) AND CAST(`store` AS BINARY)=CAST('%s' AS BINARY) AND %s AND `deleted`='n' ORDER BY `date` DESC LIMIT 1",
+								addslashes(country.a2Code), addslashes(store.a3Code), beforeAfterQuery(before, after));
 
 				feedFetchConnection.executeQuery(getGatherCode);
 
