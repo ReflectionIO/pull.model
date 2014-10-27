@@ -9,6 +9,7 @@
 package io.reflection.app.api.admin.shared.call;
 
 import io.reflection.app.api.shared.datatypes.Request;
+import io.reflection.app.datatypes.shared.Category;
 import io.reflection.app.datatypes.shared.Country;
 import io.reflection.app.datatypes.shared.Store;
 
@@ -24,6 +25,7 @@ import com.google.gson.JsonPrimitive;
 public class TriggerGatherRequest extends Request {
 	public Country country;
 	public Store store;
+	public Category category;
 	public List<String> listTypes;
 	public Long code;
 
@@ -34,6 +36,8 @@ public class TriggerGatherRequest extends Request {
 		object.add("country", jsonCountry);
 		JsonElement jsonStore = store == null ? JsonNull.INSTANCE : store.toJson();
 		object.add("store", jsonStore);
+		JsonElement jsonCategory = category == null ? JsonNull.INSTANCE : category.toJson();
+		object.add("category", jsonCategory);
 		JsonElement jsonListTypes = JsonNull.INSTANCE;
 		if (listTypes != null) {
 			jsonListTypes = new JsonArray();
@@ -63,6 +67,13 @@ public class TriggerGatherRequest extends Request {
 			if (jsonStore != null) {
 				store = new Store();
 				store.fromJson(jsonStore.getAsJsonObject());
+			}
+		}
+		if (jsonObject.has("category")) {
+			JsonElement jsonCategory = jsonObject.get("category");
+			if (jsonCategory != null) {
+				category = new Category();
+				category.fromJson(jsonCategory.getAsJsonObject());
 			}
 		}
 		if (jsonObject.has("listTypes")) {

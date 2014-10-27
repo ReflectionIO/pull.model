@@ -135,7 +135,8 @@ final class FeedFetchService implements IFeedFetchService {
 		final String updateFeedFetchQuery = String
 				.format("UPDATE `feedfetch` SET `country`='%s',`data`='%s',`date`=FROM_UNIXTIME(%d),`store`='%s',`type`='%s',`categoryid`=%d,`code2`=%d,`status`='%s' WHERE `id`=%d",
 						addslashes(feedFetch.country), addslashes(feedFetch.data), feedFetch.date.getTime() / 1000, addslashes(feedFetch.store),
-						addslashes(feedFetch.type), feedFetch.category.id.longValue(), feedFetch.code.longValue(), feedFetch.status.toString(), feedFetch.id.longValue());
+						addslashes(feedFetch.type), feedFetch.category.id.longValue(), feedFetch.code.longValue(), feedFetch.status.toString(),
+						feedFetch.id.longValue());
 
 		Connection feedFetchConnection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeFeedFetch.toString());
 
@@ -165,11 +166,8 @@ final class FeedFetchService implements IFeedFetchService {
 	/*
 	 * (non-Javadoc)
 	 * 
-	 * @see
-	 * io.reflection.app.service.fetchfeed.IFeedFetchService#getFeedFetches(
-	 * io.reflection.app.shared.datatypes.Country,
-	 * io.reflection.app.shared.datatypes.Store,java.util.Collection,
-	 * io.reflection.app.api.shared.datatypes.Pager)
+	 * @see io.reflection.app.service.fetchfeed.IFeedFetchService#getFeedFetches( io.reflection.app.shared.datatypes.Country,
+	 * io.reflection.app.shared.datatypes.Store,java.util.Collection, io.reflection.app.api.shared.datatypes.Pager)
 	 */
 	@Override
 	public List<FeedFetch> getFeedFetches(Country country, Store store, Collection<String> types, Pager pager) throws DataAccessException {
@@ -212,9 +210,7 @@ final class FeedFetchService implements IFeedFetchService {
 	/*
 	 * (non-Javadoc)
 	 * 
-	 * @see
-	 * io.reflection.app.service.fetchfeed.IFeedFetchService#getFeedFetchesCount
-	 * ( io.reflection.app.shared.datatypes.Country,
+	 * @see io.reflection.app.service.fetchfeed.IFeedFetchService#getFeedFetchesCount( io.reflection.app.shared.datatypes.Country,
 	 * io.reflection.app.shared.datatypes.Store,java.util.Collection)
 	 */
 	@Override
@@ -253,11 +249,8 @@ final class FeedFetchService implements IFeedFetchService {
 	/*
 	 * (non-Javadoc)
 	 * 
-	 * @see
-	 * io.reflection.app.service.fetchfeed.IFeedFetchService#getIngestedFeedFetches
-	 * ( io.reflection.app.shared.datatypes.Country,
-	 * io.reflection.app.shared.datatypes
-	 * .Store,java.util.Collection.reflection.app.api.shared.datatypes.Pager)
+	 * @see io.reflection.app.service.fetchfeed.IFeedFetchService#getIngestedFeedFetches( io.reflection.app.shared.datatypes.Country,
+	 * io.reflection.app.shared.datatypes.Store,java.util.Collection.reflection.app.api.shared.datatypes.Pager)
 	 */
 	@Override
 	public List<FeedFetch> getIngestedFeedFetches(Country country, Store store, Collection<String> types, Pager pager) throws DataAccessException {
@@ -312,8 +305,7 @@ final class FeedFetchService implements IFeedFetchService {
 	/*
 	 * (non-Javadoc)
 	 * 
-	 * @see io.reflection.app.service.fetchfeed.IFeedFetchService#
-	 * getIngestedFeedFetchesCount( io.reflection.app.shared.datatypes.Country,
+	 * @see io.reflection.app.service.fetchfeed.IFeedFetchService#getIngestedFeedFetchesCount( io.reflection.app.shared.datatypes.Country,
 	 * io.reflection.app.shared.datatypes.Store,java.util.Collection)
 	 */
 	@Override
@@ -364,11 +356,8 @@ final class FeedFetchService implements IFeedFetchService {
 	/*
 	 * (non-Javadoc)
 	 * 
-	 * @see io.reflection.app.service.fetchfeed.IFeedFetchService#
-	 * getUningestedFeedFetches(
-	 * io.reflection.app.shared.datatypes.Country,io.reflection
-	 * .app.shared.datatypes.Store, java.util.Collection,
-	 * io.reflection.app.api.shared.datatypes.Pager)
+	 * @see io.reflection.app.service.fetchfeed.IFeedFetchService#getUningestedFeedFetches(
+	 * io.reflection.app.shared.datatypes.Country,io.reflection.app.shared.datatypes.Store, java.util.Collection, io.reflection.app.api.shared.datatypes.Pager)
 	 */
 	@Override
 	public List<FeedFetch> getUningestedFeedFetches(Country country, Store store, Collection<String> types, Pager pager) throws DataAccessException {
@@ -378,9 +367,7 @@ final class FeedFetchService implements IFeedFetchService {
 	/*
 	 * (non-Javadoc)
 	 * 
-	 * @see io.reflection.app.service.fetchfeed.IFeedFetchService#
-	 * getUningestedFeedFetchesCount(
-	 * io.reflection.app.shared.datatypes.Country,
+	 * @see io.reflection.app.service.fetchfeed.IFeedFetchService#getUningestedFeedFetchesCount( io.reflection.app.shared.datatypes.Country,
 	 * io.reflection.app.shared.datatypes.Store,java.util.Collection)
 	 */
 	@Override
@@ -391,10 +378,8 @@ final class FeedFetchService implements IFeedFetchService {
 	/*
 	 * (non-Javadoc)
 	 * 
-	 * @see io.reflection.app.service.fetchfeed.IFeedFetchService#
-	 * getIngestableFeedFetchIds( io.reflection.app.shared.datatypes.Country,
-	 * io.reflection.app.shared.datatypes.Store,java.lang.String,
-	 * java.lang.Long)
+	 * @see io.reflection.app.service.fetchfeed.IFeedFetchService#getIngestableFeedFetchIds( io.reflection.app.shared.datatypes.Country,
+	 * io.reflection.app.shared.datatypes.Store,java.lang.String, java.lang.Long)
 	 */
 	@Override
 	public List<Long> getIngestableFeedFetchIds(Country country, Store store, String type, Long code) throws DataAccessException {
@@ -429,11 +414,8 @@ final class FeedFetchService implements IFeedFetchService {
 	/*
 	 * (non-Javadoc)
 	 * 
-	 * @see
-	 * io.reflection.app.service.fetchfeed.IFeedFetchService#isReadyToModel(
-	 * io.reflection.app.shared.datatypes.Country,
-	 * io.reflection.app.shared.datatypes.Store,java.util.Collection,
-	 * java.lang.Long)
+	 * @see io.reflection.app.service.fetchfeed.IFeedFetchService#isReadyToModel( io.reflection.app.shared.datatypes.Country,
+	 * io.reflection.app.shared.datatypes.Store,java.util.Collection, java.lang.Long)
 	 */
 	@Override
 	public Boolean isReadyToModel(Country country, Store store, Collection<String> types, Long code) throws DataAccessException {
@@ -479,10 +461,8 @@ final class FeedFetchService implements IFeedFetchService {
 	/*
 	 * (non-Javadoc)
 	 * 
-	 * @see io.reflection.app.service.fetchfeed.IFeedFetchService#
-	 * getGatherCodeFeedFetches( io.reflection.app.shared.datatypes.Country,
-	 * io.reflection.app.shared.datatypes.Store,java.util.Collection,
-	 * java.lang.Long)
+	 * @see io.reflection.app.service.fetchfeed.IFeedFetchService#getGatherCodeFeedFetches( io.reflection.app.shared.datatypes.Country,
+	 * io.reflection.app.shared.datatypes.Store,java.util.Collection, java.lang.Long)
 	 */
 	@Override
 	public List<FeedFetch> getGatherCodeFeedFetches(Country country, Store store, Collection<String> types, Long code) throws DataAccessException {
@@ -554,9 +534,7 @@ final class FeedFetchService implements IFeedFetchService {
 	/*
 	 * (non-Javadoc)
 	 * 
-	 * @see
-	 * io.reflection.app.service.feedfetch.IFeedFetchService#getGatherCode(io
-	 * .reflection.app.datatypes.shared.Country,
+	 * @see io.reflection.app.service.feedfetch.IFeedFetchService#getGatherCode(io.reflection.app.datatypes.shared.Country,
 	 * io.reflection.app.datatypes.shared.Store, java.util.Date, java.util.Date)
 	 */
 	@Override
@@ -568,25 +546,25 @@ final class FeedFetchService implements IFeedFetchService {
 		code = (Long) cache.get(memcacheKey);
 
 		if (code == null) {
-			Connection rankConnection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeRank.toString());
+			Connection feedFetchConnection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeFeedFetch.toString());
 
 			try {
-				rankConnection.connect();
+				feedFetchConnection.connect();
 				String getGatherCode = String
-						.format("SELECT `code2` FROM `rank` WHERE CAST(`country` AS BINARY)=CAST('%s' AS BINARY) AND CAST(`source` AS BINARY)=CAST('%s' AS BINARY) AND %s `deleted`='n' ORDER BY `date` DESC LIMIT 1",
+						.format("SELECT `code2` FROM `feedfetch` WHERE CAST(`country` AS BINARY)=CAST('%s' AS BINARY) AND CAST(`store` AS BINARY)=CAST('%s' AS BINARY) AND %s AND `deleted`='n' ORDER BY `date` DESC LIMIT 1",
 								addslashes(country.a2Code), addslashes(store.a3Code), beforeAfterQuery(before, after));
 
-				rankConnection.executeQuery(getGatherCode);
+				feedFetchConnection.executeQuery(getGatherCode);
 
-				if (rankConnection.fetchNextRow()) {
-					code = rankConnection.getCurrentRowLong("code2");
+				if (feedFetchConnection.fetchNextRow()) {
+					code = feedFetchConnection.getCurrentRowLong("code2");
 					cal.setTime(new Date());
 					cal.add(Calendar.DAY_OF_MONTH, 20);
 					cache.put(memcacheKey, code, cal.getTime());
 				}
 			} finally {
-				if (rankConnection != null) {
-					rankConnection.disconnect();
+				if (feedFetchConnection != null) {
+					feedFetchConnection.disconnect();
 				}
 			}
 		}
@@ -594,4 +572,35 @@ final class FeedFetchService implements IFeedFetchService {
 		return code;
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see io.reflection.app.service.feedfetch.IFeedFetchService#getListTypeCodeFeedFetch(io.reflection.app.datatypes.shared.Country,
+	 * io.reflection.app.datatypes.shared.Store, io.reflection.app.datatypes.shared.Category, java.lang.String, java.lang.Long)
+	 */
+	@Override
+	public FeedFetch getListTypeCodeFeedFetch(Country country, Store store, Category category, String listType, Long code) throws DataAccessException {
+		FeedFetch feedFetch = null;
+
+		IDatabaseService databaseService = DatabaseServiceProvider.provide();
+		Connection feedFetchConnection = databaseService.getNamedConnection(DatabaseType.DatabaseTypeFeedFetch.toString());
+
+		String getListTypeCodeFeedFetchQuery = String
+				.format("SELECT * FROM `feedfetch` WHERE CAST(`country` AS BINARY)=CAST('%s' AS BINARY) AND CAST(`store` AS BINARY)=CAST('%s' AS BINARY) AND `categoryid`=%d AND CAST(`type` AS BINARY)=CAST('%s' AS BINARY) AND `code2`=%d AND `deleted`='n' LIMIT 1",
+						addslashes(country.a2Code), addslashes(store.a3Code), category.id.longValue(), listType, code.longValue());
+		try {
+			feedFetchConnection.connect();
+			feedFetchConnection.executeQuery(getListTypeCodeFeedFetchQuery);
+
+			if (feedFetchConnection.fetchNextRow()) {
+				feedFetch = toFeedFetch(feedFetchConnection);
+			}
+		} finally {
+			if (feedFetchConnection != null) {
+				feedFetchConnection.disconnect();
+			}
+		}
+
+		return feedFetch;
+	}
 }

@@ -31,7 +31,7 @@ public class DatabaseService implements IDatabaseService {
 	public Connection getNamedConnection(String name) throws DataAccessException {
 		Connection connection = null;
 
-		String server = System.getProperty(DATABASE_SERVER_KEY), database = System.getProperty(DATABASE_CATALOGURE_KEY), username = System
+		String server = System.getProperty(DATABASE_SERVER_KEY), database = System.getProperty(DATABASE_CATALOGUE_KEY), username = System
 				.getProperty(DATABASE_USERNAME_KEY), password = System.getProperty(DATABASE_PASSWORD_KEY);
 		connection = getConnection(server, database, username, password);
 
@@ -42,7 +42,7 @@ public class DatabaseService implements IDatabaseService {
 	public Connection getAdminNamedConnection(String name) throws DataAccessException {
 		Connection connection = null;
 
-		String server = System.getProperty(DATABASE_SERVER_KEY), database = System.getProperty(DATABASE_CATALOGURE_KEY), username = System
+		String server = System.getProperty(DATABASE_SERVER_KEY), database = System.getProperty(DATABASE_CATALOGUE_KEY), username = System
 				.getProperty(DATABASE_ADMIN_USERNAME_KEY), password = System.getProperty(DATABASE_ADMIN_PASSWORD_KEY);
 		connection = getConnection(server, database, username, password);
 
@@ -53,7 +53,7 @@ public class DatabaseService implements IDatabaseService {
 	public Connection getCronNamedConnection(String name) throws DataAccessException {
 		Connection connection = null;
 
-		String server = System.getProperty(DATABASE_SERVER_KEY), database = System.getProperty(DATABASE_CATALOGURE_KEY), username = System
+		String server = System.getProperty(DATABASE_SERVER_KEY), database = System.getProperty(DATABASE_CATALOGUE_KEY), username = System
 				.getProperty(DATABASE_CRON_USERNAME_KEY), password = System.getProperty(DATABASE_CRON_PASSWORD_KEY);
 		connection = getConnection(server, database, username, password);
 

@@ -8,6 +8,14 @@
 //
 package io.reflection.app.api.admin.shared.call;
 
+import io.reflection.app.api.shared.datatypes.Request;
+import io.reflection.app.datatypes.shared.Category;
+import io.reflection.app.datatypes.shared.Country;
+import io.reflection.app.datatypes.shared.ModelRun;
+import io.reflection.app.datatypes.shared.ModelTypeType;
+import io.reflection.app.datatypes.shared.SimpleModelRun;
+import io.reflection.app.datatypes.shared.Store;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -17,15 +25,16 @@ import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 
-import io.reflection.app.api.shared.datatypes.Request;
-import io.reflection.app.datatypes.shared.Country;
-import io.reflection.app.datatypes.shared.Store;
-
 public class TriggerPredictRequest extends Request {
+
 	public Country country;
 	public Store store;
+	public Category category;
 	public List<String> listTypes;
+	public SimpleModelRun simpleModelRun;
+	public ModelRun modelRun;
 	public Long code;
+	public ModelTypeType modelType;
 
 	@Override
 	public JsonObject toJson() {
@@ -34,6 +43,8 @@ public class TriggerPredictRequest extends Request {
 		object.add("country", jsonCountry);
 		JsonElement jsonStore = store == null ? JsonNull.INSTANCE : store.toJson();
 		object.add("store", jsonStore);
+		JsonElement jsonCategory = category == null ? JsonNull.INSTANCE : category.toJson();
+		object.add("category", jsonCategory);
 		JsonElement jsonListTypes = JsonNull.INSTANCE;
 		if (listTypes != null) {
 			jsonListTypes = new JsonArray();
@@ -43,8 +54,14 @@ public class TriggerPredictRequest extends Request {
 			}
 		}
 		object.add("listTypes", jsonListTypes);
+		JsonElement jsonSimpleModelRun = simpleModelRun == null ? JsonNull.INSTANCE : simpleModelRun.toJson();
+		object.add("simpleModelRun", jsonSimpleModelRun);
+		JsonElement jsonModelRun = modelRun == null ? JsonNull.INSTANCE : modelRun.toJson();
+		object.add("modelRun", jsonModelRun);
 		JsonElement jsonCode = code == null ? JsonNull.INSTANCE : new JsonPrimitive(code);
 		object.add("code", jsonCode);
+		JsonElement jsonModelType = modelType == null ? JsonNull.INSTANCE : new JsonPrimitive(modelType.toString());
+		object.add("modelType", jsonModelType);
 		return object;
 	}
 
@@ -65,6 +82,13 @@ public class TriggerPredictRequest extends Request {
 				store.fromJson(jsonStore.getAsJsonObject());
 			}
 		}
+		if (jsonObject.has("category")) {
+			JsonElement jsonCategory = jsonObject.get("category");
+			if (jsonCategory != null) {
+				category = new Category();
+				category.fromJson(jsonCategory.getAsJsonObject());
+			}
+		}
 		if (jsonObject.has("listTypes")) {
 			JsonElement jsonListTypes = jsonObject.get("listTypes");
 			if (jsonListTypes != null) {
@@ -79,10 +103,30 @@ public class TriggerPredictRequest extends Request {
 			}
 		}
 
+		if (jsonObject.has("simpleModelRun")) {
+			JsonElement jsonSimpleModelRun = jsonObject.get("simpleModelRun");
+			if (jsonSimpleModelRun != null) {
+				simpleModelRun = new SimpleModelRun();
+				simpleModelRun.fromJson(jsonSimpleModelRun.getAsJsonObject());
+			}
+		}
+		if (jsonObject.has("modelRun")) {
+			JsonElement jsonModelRun = jsonObject.get("modelRun");
+			if (jsonModelRun != null) {
+				modelRun = new ModelRun();
+				modelRun.fromJson(jsonModelRun.getAsJsonObject());
+			}
+		}
 		if (jsonObject.has("code")) {
 			JsonElement jsonCode = jsonObject.get("code");
 			if (jsonCode != null) {
 				code = Long.valueOf(jsonCode.getAsLong());
+			}
+		}
+		if (jsonObject.has("modelType")) {
+			JsonElement jsonModelType = jsonObject.get("modelType");
+			if (jsonModelType != null) {
+				modelType = ModelTypeType.fromString(jsonModelType.getAsString());
 			}
 		}
 	}

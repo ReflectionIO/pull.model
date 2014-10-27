@@ -15,7 +15,7 @@ import com.spacehopperstudios.service.IService;
 public interface IDatabaseService extends IService {
 
 	public static final String DATABASE_SERVER_KEY = "db.connection.server";
-	public static final String DATABASE_CATALOGURE_KEY = "db.connection.catalogue";
+	public static final String DATABASE_CATALOGUE_KEY = "db.connection.catalogue";
 	public static final String DATABASE_USERNAME_KEY = "db.connection.username";
 	public static final String DATABASE_PASSWORD_KEY = "db.connection.password";
 

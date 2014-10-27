@@ -11,6 +11,7 @@ import io.reflection.app.datatypes.shared.Item;
 import io.reflection.app.datatypes.shared.Permission;
 import io.reflection.app.datatypes.shared.Rank;
 import io.reflection.app.datatypes.shared.Role;
+import io.reflection.app.datatypes.shared.Store;
 
 import java.util.Collections;
 import java.util.Comparator;
@@ -25,6 +26,22 @@ import com.google.gson.JsonParser;
  * 
  */
 public class DataTypeHelper {
+
+	public static final String IOS_STORE_A3 = "ios";
+
+	private static final Store IOS_STORE = new Store();
+
+	public static final String ACTIVE_VALUE = "y";
+	public static final String INACTIVE_VALUE = "n";
+
+	public static final long PERMISSION_FULL_RANK_VIEW_ID = 1;
+	public static final long PERMISSION_HAS_LINKED_ACCOUNT_ID = 20;
+
+	public static final long ROLE_ADMIN_ID = 1;
+	public static final long ROLE_DEVELOPER_ID = 2;
+	public static final long ROLE_PREMIUM_ID = 3;
+	public static final long ROLE_ALPHA_ID = 4;
+	public static final long ROLE_BETA_ID = 5;
 
 	/**
 	 * Creates a role with a given id
@@ -55,6 +72,8 @@ public class DataTypeHelper {
 
 		if (item != null) {
 			usesIap = jsonPropertiesIapState(item.properties, yes, no, unknown);
+		} else {
+			usesIap = unknown;
 		}
 
 		return usesIap;
@@ -98,5 +117,26 @@ public class DataTypeHelper {
 
 			});
 		}
+	}
+
+	public static void sortItemsByDate(List<Item> items) {
+		if (items != null) {
+			Collections.sort(items, new Comparator<Item>() {
+
+				@Override
+				public int compare(Item i1, Item i2) {
+					return i1.added.getTime() > i2.added.getTime() ? 1 : (i2.added.getTime() > i1.added.getTime() ? -1 : 0);
+				}
+
+			});
+		}
+	}
+
+	public static Store getIosStore() {
+		if (!IOS_STORE_A3.equals(IOS_STORE.a3Code)) {
+			IOS_STORE.a3Code = IOS_STORE_A3;
+		}
+
+		return IOS_STORE;
 	}
 }
