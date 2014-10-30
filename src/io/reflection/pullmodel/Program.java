@@ -261,10 +261,10 @@ public class Program {
 					if (feedFetchId == null) {
 						store = mappedParams.get("store");
 						country = mappedParams.get("country");
-						
+
 						String categoryIdParam = mappedParams.get("categoryid");
 						categoryId = categoryIdParam == null ? null : Long.valueOf(categoryIdParam);
-						
+
 						listType = mappedParams.get("type");
 
 						String codeParam = mappedParams.get("code");
@@ -275,9 +275,9 @@ public class Program {
 						if (feedFetch != null) {
 							store = feedFetch.store;
 							country = feedFetch.country;
-							
+
 							categoryId = feedFetch.category.id;
-							
+
 							listType = feedFetch.type;
 							code = feedFetch.code;
 						}
@@ -360,7 +360,6 @@ public class Program {
 		if (session == null) {
 			callApiLogin(modelType, store, country, category, listType, listTypes, code, simpleModelRun);
 		} else {
-
 			AdminService admin = new AdminService();
 			admin.setUrl(System.getProperty(SystemConfigurator.ADMIN_SERVICE_URL_KEY));
 
@@ -418,7 +417,7 @@ public class Program {
 					// the same thread
 					throw new RuntimeException(caught);
 				}
-			}).get();
+			});
 		}
 
 	}
@@ -478,7 +477,7 @@ public class Program {
 					// FIXME: this exception is not caught because it is not on the same thread
 					throw new RuntimeException(caught);
 				}
-			}).get();
+			});
 		} catch (Throwable caught) {
 			LOGGER.error("An error occured while calling Api Login", caught);
 			throw new RuntimeException(caught);

@@ -13,12 +13,16 @@ import io.reflection.app.api.admin.shared.call.TriggerPredictResponse;
 
 import java.io.IOException;
 
-import com.ning.http.client.AsyncCompletionHandler;
-import com.ning.http.client.ListenableFuture;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.ClientProtocolException;
+import org.apache.http.client.ResponseHandler;
+import org.apache.http.client.methods.HttpExecutionAware;
+
 import com.willshex.gson.json.service.client.HttpException;
 
 /**
  * This is a subset of the full admin service client specifically for the pull.model project
+ * 
  * @author William Shakour (billy1380)
  *
  */
@@ -26,14 +30,15 @@ public final class AdminService extends JsonService {
 
 	public static final String AdminMethodTriggerPredict = "TriggerPredict";
 
-	public ListenableFuture<TriggerPredictResponse> triggerPredict(final TriggerPredictRequest input, final AsyncCallback<TriggerPredictResponse> output) {
-		ListenableFuture<TriggerPredictResponse> handle = null;
+	public HttpExecutionAware triggerPredict(final TriggerPredictRequest input, final AsyncCallback<TriggerPredictResponse> output) {
+		HttpExecutionAware handle = null;
 		try {
-			handle = sendRequest(AdminMethodTriggerPredict, input, new AsyncCompletionHandler<TriggerPredictResponse>() {
+			handle = sendRequest(AdminMethodTriggerPredict, input, new ResponseHandler<TriggerPredictResponse>() {
 				@Override
-				public TriggerPredictResponse onCompleted(com.ning.http.client.Response response) throws Exception {
+				public TriggerPredictResponse handleResponse(HttpResponse response) throws ClientProtocolException, IOException {
+
+					TriggerPredictResponse outputParameter = new TriggerPredictResponse();
 					try {
-						TriggerPredictResponse outputParameter = new TriggerPredictResponse();
 						parseResponse(response, outputParameter);
 						output.onSuccess(outputParameter);
 						onCallSuccess(AdminService.this, AdminMethodTriggerPredict, input, outputParameter);
@@ -41,14 +46,8 @@ public final class AdminService extends JsonService {
 						output.onFailure(exception);
 						onCallFailure(AdminService.this, AdminMethodTriggerPredict, input, exception);
 					}
-					return null;
-				}
 
-				@Override
-				public void onThrowable(Throwable exception) {
-					super.onThrowable(exception);
-					output.onFailure(exception);
-					onCallFailure(AdminService.this, AdminMethodTriggerPredict, input, exception);
+					return outputParameter;
 				}
 			});
 			onCallStart(AdminService.this, AdminMethodTriggerPredict, input, handle);
