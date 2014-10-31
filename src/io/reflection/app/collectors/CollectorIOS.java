@@ -42,9 +42,7 @@ public class CollectorIOS implements Collector {
 	/*
 	 * (non-Javadoc)
 	 * 
-	 * @see
-	 * io.reflection.app.collectors.Collector#getCounterpartTypes(java.lang.
-	 * String)
+	 * @see io.reflection.app.collectors.Collector#getCounterpartTypes(java.lang. String)
 	 */
 	@Override
 	public List<String> getCounterpartTypes(String type) {
@@ -57,21 +55,27 @@ public class CollectorIOS implements Collector {
 		switch (type) {
 		case TOP_FREE_APPS:
 			counterParts = Arrays.asList(TOP_GROSSING_APPS);
+			break;
 		case TOP_PAID_APPS:
 			counterParts = Arrays.asList(TOP_GROSSING_APPS);
+			break;
 		case TOP_GROSSING_APPS:
 			counterParts = Arrays.asList(TOP_PAID_APPS, TOP_FREE_APPS);
+			break;
 		case TOP_FREE_IPAD_APPS:
 			counterParts = Arrays.asList(TOP_GROSSING_IPAD_APPS);
+			break;
 		case TOP_PAID_IPAD_APPS:
 			counterParts = Arrays.asList(TOP_GROSSING_IPAD_APPS);
+			break;
 		case TOP_GROSSING_IPAD_APPS:
 			counterParts = Arrays.asList(TOP_PAID_IPAD_APPS, TOP_FREE_IPAD_APPS);
+			break;
 		}
 
 		if (LOG.isLoggable(GaeLevel.DEBUG)) {
 			if (counterParts == null) {
-
+				LOG.finer("Type [" + type + "] does not appear to have any counterparts.");
 			} else {
 				for (String counterPart : counterParts) {
 					LOG.finer(counterPart);
@@ -90,8 +94,7 @@ public class CollectorIOS implements Collector {
 	/*
 	 * (non-Javadoc)
 	 * 
-	 * @see io.reflection.app.collectors.Collector#collect(java.lang.String,
-	 * java.lang.String, java.lang.String, java.lang.Long)
+	 * @see io.reflection.app.collectors.Collector#collect(java.lang.String, java.lang.String, java.lang.String, java.lang.Long)
 	 */
 	@Override
 	public List<Long> collect(String country, String type, String category, Long code) throws DataAccessException {

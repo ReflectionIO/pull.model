@@ -1,11 +1,17 @@
 package io.reflection.pullmodel.json.service.client;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 
-import com.ning.http.client.AsyncCompletionHandler;
-import com.ning.http.client.AsyncHttpClient;
-import com.ning.http.client.ListenableFuture;
-import com.ning.http.client.RequestBuilder;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.ResponseHandler;
+import org.apache.http.client.methods.HttpExecutionAware;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.HttpClientBuilder;
+
 import com.spacehopperstudios.utility.JsonUtils;
 import com.spacehopperstudios.utility.StringUtils;
 import com.willshex.gson.json.service.client.HttpException;
@@ -20,7 +26,7 @@ public class JsonService {
 	}
 
 	protected String url;
-	protected AsyncHttpClient client = new AsyncHttpClient();
+	protected HttpClient client = HttpClientBuilder.create().build();
 
 	public String getUrl() {
 		return url;
@@ -30,43 +36,53 @@ public class JsonService {
 		url = value;
 	}
 
-	protected void parseResponse(com.ning.http.client.Response response, Response outputParameter) throws HttpException, IOException {
+	protected void parseResponse(HttpResponse response, Response outputParameter) throws HttpException, IOException {
 		String responseText = null;
-		if (response.getStatusCode() >= 200 && response.getStatusCode() < 300 && (responseText = response.getResponseBody()) != null
-				&& !"".equals(responseText)) {
+		if (response.getStatusLine().getStatusCode() >= 200 && response.getStatusLine().getStatusCode() < 300
+				&& (responseText = getResponseBody(response)) != null && !"".equals(responseText)) {
 			outputParameter.fromJson(responseText);
-		} else if (response.getStatusCode() >= 400)
-			throw new HttpException(response.getStatusCode(), response.getStatusText());
+		} else if (response.getStatusLine().getStatusCode() >= 400)
+			throw new HttpException(response.getStatusLine().getStatusCode(), response.getStatusLine().getReasonPhrase());
 	}
 
-	protected <T> ListenableFuture<T> sendRequest(String action, Request input, AsyncCompletionHandler<T> callback) throws IOException {
+	protected String getResponseBody(HttpResponse response) throws IOException {
+		StringBuffer body = new StringBuffer();
+
+		BufferedReader reader = null;
+		try {
+			reader = new BufferedReader(new InputStreamReader(response.getEntity().getContent()));
+			String line;
+			while ((line = reader.readLine()) != null) {
+				body.append(line);
+			}
+		} finally {
+			if (reader != null) {
+				reader.close();
+			}
+		}
+
+		return body.toString();
+	}
+
+	protected <T> HttpExecutionAware sendRequest(String action, Request input, ResponseHandler<T> callback) throws IOException {
 		String requestData = "action=" + action + "&request=";
 
-		RequestBuilder builder = new RequestBuilder("POST").setUrl(url);
+		HttpPost request = new HttpPost(url);
 
 		requestData += StringUtils.urlencode(JsonUtils.cleanJson(input.toJson().toString()));
 
-		builder.setHeader("Content-Type", "application/x-www-form-urlencoded");
-		builder.setBody(requestData.getBytes());
+		request.setHeader("Content-Type", "application/x-www-form-urlencoded");
+		request.setEntity(new StringEntity(requestData));
 
-        return client.executeRequest(builder.build(), callback);
-	}
+		// T response =
+		client.execute(request, callback);
 
-	protected <T extends Response> void onCallStart(JsonService origin, String callName, Request input, ListenableFuture<T> requestHandle) {
-	}
-
-	protected void onCallSuccess(JsonService origin, String callName, Request input, Response output) {
+		return request;
 	}
 
-	protected void onCallFailure(JsonService origin, String callName, Request input, Throwable caught) {
-	}
-	
-	/* (non-Javadoc)
-	 * @see java.lang.Object#finalize()
-	 */
-	@Override
-	protected void finalize() throws Throwable {
-	    client.close();
-	    super.finalize();
-	}
+	protected <T extends Response> void onCallStart(JsonService origin, String callName, Request input, HttpExecutionAware output) {}
+
+	protected void onCallSuccess(JsonService origin, String callName, Request input, Response output) {}
+
+	protected void onCallFailure(JsonService origin, String callName, Request input, Throwable caught) {}
 }

@@ -13,12 +13,16 @@ import io.reflection.app.api.core.shared.call.LoginResponse;
 
 import java.io.IOException;
 
-import com.ning.http.client.AsyncCompletionHandler;
-import com.ning.http.client.ListenableFuture;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.ClientProtocolException;
+import org.apache.http.client.ResponseHandler;
+import org.apache.http.client.methods.HttpExecutionAware;
+
 import com.willshex.gson.json.service.client.HttpException;
 
 /**
  * This is a subset of the full core service client specifically for the pull.model project
+ * 
  * @author William Shakour (billy1380)
  *
  */
@@ -26,14 +30,15 @@ public final class CoreService extends JsonService {
 
 	public static final String CoreMethodLogin = "Login";
 
-	public ListenableFuture<LoginResponse> login(final LoginRequest input, final AsyncCallback<LoginResponse> output) {
-		ListenableFuture<LoginResponse> handle = null;
+	public HttpExecutionAware login(final LoginRequest input, final AsyncCallback<LoginResponse> output) {
+		HttpExecutionAware handle = null;
 		try {
-			handle = sendRequest(CoreMethodLogin, input, new AsyncCompletionHandler<LoginResponse>() {
+			handle = sendRequest(CoreMethodLogin, input, new ResponseHandler<LoginResponse>() {
+
 				@Override
-				public LoginResponse onCompleted(com.ning.http.client.Response response) throws Exception {
+				public LoginResponse handleResponse(HttpResponse response) throws ClientProtocolException, IOException {
+					LoginResponse outputParameter = new LoginResponse();
 					try {
-						LoginResponse outputParameter = new LoginResponse();
 						parseResponse(response, outputParameter);
 						output.onSuccess(outputParameter);
 						onCallSuccess(CoreService.this, CoreMethodLogin, input, outputParameter);
@@ -41,15 +46,8 @@ public final class CoreService extends JsonService {
 						output.onFailure(exception);
 						onCallFailure(CoreService.this, CoreMethodLogin, input, exception);
 					}
-					
-					return null;
-				}
 
-				@Override
-				public void onThrowable(Throwable exception) {
-					super.onThrowable(exception);
-					output.onFailure(exception);
-					onCallFailure(CoreService.this, CoreMethodLogin, input, exception);
+					return outputParameter;
 				}
 			});
 			onCallStart(CoreService.this, CoreMethodLogin, input, handle);
@@ -57,7 +55,6 @@ public final class CoreService extends JsonService {
 			output.onFailure(exception);
 			onCallFailure(CoreService.this, CoreMethodLogin, input, exception);
 		}
-		return (ListenableFuture<LoginResponse>) handle;
+		return handle;
 	}
-
 }
