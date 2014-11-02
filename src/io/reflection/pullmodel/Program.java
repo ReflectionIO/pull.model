@@ -218,7 +218,13 @@ public class Program {
 
 		LOGGER.info("pulling message from the model");
 		while (true) {
-			Tasks tasks = getLeasedTasks(taskQueueApi, System.getProperty(MODEL_QUEUE_NAME_KEY));
+
+			Tasks tasks = null;
+			try {
+				tasks = getLeasedTasks(taskQueueApi, System.getProperty(MODEL_QUEUE_NAME_KEY));
+			} catch (Exception ex) {
+				LOGGER.error("An error occured getting tasks", ex);
+			}
 
 			if (tasks == null || tasks.getItems() == null || tasks.getItems().size() == 0) {
 				// LOGGER.info("No tasks to lease exiting");
