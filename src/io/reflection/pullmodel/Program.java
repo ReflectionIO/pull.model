@@ -768,7 +768,7 @@ public class Program {
 					writer.append(grossingPosition == null || grossingPosition.intValue() == 0 ? "NA" : grossingPosition.toString());
 					writer.append(",");
 
-					double price = rankConnection.getCurrentRowInteger("price").intValue() / 100.0;
+					double price = rankConnection.getCurrentRowInteger("price").doubleValue() / 100.0;
 					writer.append(Double.toString(price));
 					writer.append(",");
 
@@ -851,7 +851,7 @@ public class Program {
 
 						rank.itemId = itemId;
 						rank.position = position;
-						rank.price = Float.valueOf((float) connection.getCurrentRowInteger("price").intValue() / 100.0f);
+						rank.price = Float.valueOf(connection.getCurrentRowInteger("price").floatValue() / 100.0f);
 
 						itemIdRank.put(itemId, rank);
 					} else {
@@ -983,7 +983,7 @@ public class Program {
 					sale.sku = connection.getCurrentRowString("sku");
 
 					sale.units = connection.getCurrentRowInteger("units");
-					sale.customerPrice = connection.getCurrentRowInteger("customerprice");
+					sale.customerPrice = Float.valueOf(connection.getCurrentRowInteger("customerprice").floatValue() / 100.0f);
 					sale.parentIdentifier = stripslashes(connection.getCurrentRowString("parentidentifier"));
 
 					if (FREE_OR_PAID_APP_UNIVERSAL_IOS.equals(sale.typeIdentifier) || UPDATE_UNIVERSAL_IOS.equals(sale.typeIdentifier)
@@ -1041,7 +1041,7 @@ public class Program {
 					// If units and customer prices are negatives (refunds),
 					// subtract
 					// the value setting units positive
-					rank.revenue += (Math.abs(sale.units.floatValue()) * (float) sale.customerPrice.intValue()) / 100.0f;
+					rank.revenue += Math.abs(sale.units.floatValue()) * sale.customerPrice.floatValue();
 
 					// Take into account price and downloads only from main Apps
 					if (sale.typeIdentifier.equals(FREE_OR_PAID_APP_IPHONE_AND_IPOD_TOUCH_IOS) || sale.typeIdentifier.equals(FREE_OR_PAID_APP_UNIVERSAL_IOS)

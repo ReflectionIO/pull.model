@@ -25,12 +25,12 @@ public class Sale extends DataType {
 	public String version;
 	public String typeIdentifier;
 	public Integer units;
-	public Integer proceeds;
+	public Float proceeds;
 	public String currency;
 	public Date begin;
 	public Date end;
 	public String customerCurrency;
-	public Integer customerPrice;
+	public Float customerPrice;
 	public String promoCode;
 	public String parentIdentifier;
 	public String subscription;
@@ -145,7 +145,7 @@ public class Sale extends DataType {
 		if (jsonObject.has("proceeds")) {
 			JsonElement jsonProceeds = jsonObject.get("proceeds");
 			if (jsonProceeds != null) {
-				proceeds = Integer.valueOf(jsonProceeds.getAsInt());
+				proceeds = Float.valueOf(jsonProceeds.getAsFloat());
 			}
 		}
 		if (jsonObject.has("currency")) {
@@ -175,7 +175,7 @@ public class Sale extends DataType {
 		if (jsonObject.has("customerPrice")) {
 			JsonElement jsonCustomerPrice = jsonObject.get("customerPrice");
 			if (jsonCustomerPrice != null) {
-				customerPrice = Integer.valueOf(jsonCustomerPrice.getAsInt());
+				customerPrice = Float.valueOf(jsonCustomerPrice.getAsFloat());
 			}
 		}
 		if (jsonObject.has("promoCode")) {

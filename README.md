@@ -1,4 +1,4 @@
 pull.model
 ==========
 
-Java application that pulls items from the model queue runs the model then inserts items into the predict queue
+Java application that pulls items (model runs) from the model queue runs the calibration phase then inserts items into the predict queue

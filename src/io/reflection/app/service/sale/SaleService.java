@@ -89,12 +89,12 @@ final class SaleService implements ISaleService {
 		sale.version = stripslashes(connection.getCurrentRowString("version"));
 		sale.typeIdentifier = stripslashes(connection.getCurrentRowString("typeidentifier"));
 		sale.units = connection.getCurrentRowInteger("units");
-		sale.proceeds = connection.getCurrentRowInteger("proceeds");
+		sale.proceeds = Float.valueOf(connection.getCurrentRowInteger("proceeds").floatValue() / 100.0f);
 		sale.currency = stripslashes(connection.getCurrentRowString("currency"));
 		sale.begin = connection.getCurrentRowDateTime("begin");
 		sale.end = connection.getCurrentRowDateTime("end");
 		sale.customerCurrency = stripslashes(connection.getCurrentRowString("customercurrency"));
-		sale.customerPrice = connection.getCurrentRowInteger("customerprice");
+		sale.customerPrice = Float.valueOf(connection.getCurrentRowInteger("customerprice").floatValue() / 100.0f);
 		sale.promoCode = stripslashes(connection.getCurrentRowString("promocode"));
 		sale.parentIdentifier = stripslashes(connection.getCurrentRowString("parentidentifier"));
 		sale.subscription = stripslashes(connection.getCurrentRowString("subscription"));
@@ -113,10 +113,10 @@ final class SaleService implements ISaleService {
 		final String addSaleQuery = String
 				.format("INSERT INTO `sale` (`dataaccountid`,`itemid`,`country`,`sku`,`developer`,`title`,`version`,`typeidentifier`,`units`,`proceeds`,`currency`,`begin`,`end`,`customercurrency`,`customerprice`,`promocode`,`parentidentifier`,`subscription`,`period`,`category`) VALUES (%d,%d,'%s','%s','%s','%s','%s','%s',%d,%d,'%s',FROM_UNIXTIME(%d),FROM_UNIXTIME(%d),'%s',%d,'%s','%s','%s','%s','%s')",
 						sale.account.id.longValue(), sale.item.id.longValue(), addslashes(sale.country), addslashes(sale.sku), addslashes(sale.developer),
-						addslashes(sale.title), addslashes(sale.version), addslashes(sale.typeIdentifier), sale.units.intValue(), sale.proceeds.intValue(),
-						addslashes(sale.currency), sale.begin.getTime() / 1000, sale.end.getTime() / 1000, addslashes(sale.customerCurrency),
-						sale.customerPrice.intValue(), addslashes(sale.promoCode), addslashes(sale.parentIdentifier), addslashes(sale.subscription),
-						addslashes(sale.period), addslashes(sale.category));
+						addslashes(sale.title), addslashes(sale.version), addslashes(sale.typeIdentifier), sale.units.intValue(),
+						(int) (sale.proceeds.floatValue() * 100.0f), addslashes(sale.currency), sale.begin.getTime() / 1000, sale.end.getTime() / 1000,
+						addslashes(sale.customerCurrency), (int) (sale.customerPrice.floatValue() * 100.0f), addslashes(sale.promoCode),
+						addslashes(sale.parentIdentifier), addslashes(sale.subscription), addslashes(sale.period), addslashes(sale.category));
 
 		Connection saleConnection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeSale.toString());
 
@@ -213,7 +213,7 @@ final class SaleService implements ISaleService {
 	 */
 	private List<Item> generateDummyItems(Collection<String> itemId, List<String> typeIdentifiers) throws DataAccessException {
 		List<Item> items = new ArrayList<Item>();
-		
+
 		String typeId = "";
 		if (typeIdentifiers != null && typeIdentifiers.size() > 0) {
 			typeId = "AND `typeidentifier` IN ('" + StringUtils.join(typeIdentifiers, "','") + "')";
@@ -323,9 +323,9 @@ final class SaleService implements ISaleService {
 					"(%d,%s,'%s','%s','%s','%s','%s','%s',%d,%d,'%s',FROM_UNIXTIME(%d),FROM_UNIXTIME(%d),'%s',%d,'%s','%s','%s','%s','%s')",
 					sale.account.id.longValue(), sale.item.internalId == null ? "NULL" : "'" + sale.item.internalId + "'", addslashes(sale.country),
 					addslashes(sale.sku), addslashes(sale.developer), addslashes(sale.title), addslashes(sale.version), addslashes(sale.typeIdentifier),
-					sale.units.intValue(), sale.proceeds.intValue(), addslashes(sale.currency), sale.begin.getTime() / 1000, sale.end.getTime() / 1000,
-					addslashes(sale.customerCurrency), sale.customerPrice.intValue(), addslashes(sale.promoCode), addslashes(sale.parentIdentifier),
-					addslashes(sale.subscription), addslashes(sale.period), addslashes(sale.category)));
+					sale.units.intValue(), (int) (sale.proceeds.floatValue() * 100.0f), addslashes(sale.currency), sale.begin.getTime() / 1000,
+					sale.end.getTime() / 1000, addslashes(sale.customerCurrency), (int) (sale.customerPrice.floatValue() * 100.0f), addslashes(sale.promoCode),
+					addslashes(sale.parentIdentifier), addslashes(sale.subscription), addslashes(sale.period), addslashes(sale.category)));
 		}
 
 		Connection saleConnection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeSale.toString());

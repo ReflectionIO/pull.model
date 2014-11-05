@@ -79,7 +79,7 @@ final class ItemService implements IItemService {
 		item.externalId = stripslashes(connection.getCurrentRowString("externalid"));
 		item.internalId = stripslashes(connection.getCurrentRowString("internalid"));
 		item.name = stripslashes(connection.getCurrentRowString("name"));
-		item.price = Float.valueOf((float) connection.getCurrentRowInteger("price").intValue() / 100.0f);
+		item.price = Float.valueOf(connection.getCurrentRowInteger("price").floatValue() / 100.0f);
 
 		item.smallImage = stripslashes(connection.getCurrentRowString("smallimage"));
 		item.mediumImage = stripslashes(connection.getCurrentRowString("mediumimage"));
