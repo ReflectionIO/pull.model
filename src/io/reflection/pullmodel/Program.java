@@ -936,7 +936,6 @@ public class Program {
 		}
 
 		if (createFile) {
-			boolean gotAllRows = false;
 			// ios has a datasource itunes connect
 			String dataSourceA3Code = DataTypeHelper.IOS_STORE_A3.equals(store.a3Code) ? "itc" : "*** error ***";
 
@@ -944,7 +943,6 @@ public class Program {
 				category = CategoryServiceProvider.provide().getCategory(category.id);
 			}
 
-			Date startDate = null, endDate = null;
 			FeedFetch feedFetch = FeedFetchServiceProvider.provide().getListTypeCodeFeedFetch(country, store, category, listType, code);
 
 			Calendar cal = Calendar.getInstance();
@@ -955,137 +953,149 @@ public class Program {
 				cal.setTime(new Date());
 			}
 
+			Map<String, String> parentIdItemIdLookup = new HashMap<String, String>();
+			List<Sale> sales = null;
+			Date startDate = null, endDate = null;
+
 			cal.set(Calendar.HOUR_OF_DAY, 0);
 			cal.set(Calendar.MINUTE, 0);
 			cal.set(Calendar.SECOND, 0);
 			cal.set(Calendar.MILLISECOND, 1);
 
 			endDate = cal.getTime();
-
 			cal.add(Calendar.DAY_OF_YEAR, -1);
 			startDate = cal.getTime();
+			sales = getSales(dataSourceA3Code, startDate, endDate, country.a2Code, form, parentIdItemIdLookup);
 
-			String query = String
-					.format("SELECT `itemid`,`sku`,`typeidentifier`,`units`,`customerprice`,`parentidentifier` FROM `sale` JOIN `dataaccount` on "
-							+ "`dataaccount`.`id`=`dataaccountid` JOIN `datasource` ON `sourceid`=`datasource`.`id` WHERE `datasource`.`a3code`='%s' AND %s AND `country`='%s'",
-							dataSourceA3Code, beforeAfterQuery(endDate, startDate, "begin"), country.a2Code);
+			// if no sales were found for the data (shift both dates back 1 day and try again)
+			// we can do this more times if required
+			if (sales.size() == 0) {
+				endDate = cal.getTime();
+				cal.add(Calendar.DAY_OF_YEAR, -1);
+				startDate = cal.getTime();
+				sales = getSales(dataSourceA3Code, startDate, endDate, country.a2Code, form, parentIdItemIdLookup);
+			}
 
-			Connection connection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeSale.toString());
-
-			List<Sale> sales = new ArrayList<Sale>();
-			Map<String, String> parentIdItemIdLookup = new HashMap<String, String>();
-
-			try {
-				connection.connect();
-				connection.executeQuery(query);
-
-				Sale sale;
-				while (connection.fetchNextRow()) {
-					sale = new Sale();
-
-					sale.item = new Item();
-					sale.item.internalId = connection.getCurrentRowString("itemid");
-					sale.typeIdentifier = connection.getCurrentRowString("typeidentifier");
-					sale.sku = connection.getCurrentRowString("sku");
-
-					sale.units = connection.getCurrentRowInteger("units");
-					sale.customerPrice = Float.valueOf(connection.getCurrentRowInteger("customerprice").floatValue() / 100.0f);
-					sale.parentIdentifier = stripslashes(connection.getCurrentRowString("parentidentifier"));
-
-					if (FREE_OR_PAID_APP_UNIVERSAL_IOS.equals(sale.typeIdentifier) || UPDATE_UNIVERSAL_IOS.equals(sale.typeIdentifier)
-							|| (FormType.FormTypeOther == form && (FREE_OR_PAID_APP_IPHONE_AND_IPOD_TOUCH_IOS.equals(sale.typeIdentifier)))
-							|| (FormType.FormTypeOther == form && (UPDATE_IPHONE_AND_IPOD_TOUCH_IOS.equals(sale.typeIdentifier)))
-							|| (FormType.FormTypeTablet == form && (FREE_OR_PAID_APP_IPAD_IOS.equals(sale.typeIdentifier)))
-							|| (FormType.FormTypeTablet == form && (UPDATE_IPAD_IOS.equals(sale.typeIdentifier)))
-							|| INAPP_PURCHASE_PURCHASE_IOS.equals(sale.typeIdentifier) || INAPP_PURCHASE_SUBSCRIPTION_IOS.equals(sale.typeIdentifier)) {
-						sales.add(sale);
-					}
-
-					// If type identifier != IA1 or IA9, add parent identifiers into
-					// the Map
-					if (!sale.typeIdentifier.equals(INAPP_PURCHASE_PURCHASE_IOS) && !sale.typeIdentifier.equals(INAPP_PURCHASE_SUBSCRIPTION_IOS)) {
-						parentIdItemIdLookup.put(sale.sku, sale.item.internalId);
-					}
+			String itemId;
+			Map<String, Rank> itemIDsRankLookup = new HashMap<String, Rank>();
+			Rank rank;
+			Set<String> missingIdentifiers = new HashSet<String>();
+			for (Sale sale : sales) {
+				// Assign item id of the parent to IAP and Subscriptions
+				if (sale.typeIdentifier.equals(INAPP_PURCHASE_PURCHASE_IOS) || sale.typeIdentifier.equals(INAPP_PURCHASE_SUBSCRIPTION_IOS)) {
+					itemId = parentIdItemIdLookup.get(sale.parentIdentifier);
+				} else {
+					itemId = sale.item.internalId;
 				}
 
-				gotAllRows = true;
-			} finally {
-				if (connection != null) {
-					connection.disconnect();
+				if (itemId == null) {
+					itemId = MISSING_ID_SKU_PREFIX + sale.parentIdentifier;
+					missingIdentifiers.add(sale.parentIdentifier);
+				}
+
+				if (itemIDsRankLookup.get(itemId) == null) {
+					rank = new Rank();
+					rank.downloads = Integer.valueOf(0);
+					rank.revenue = Float.valueOf(0.0f);
+
+					itemIDsRankLookup.put(itemId, rank);
+				} else {
+					rank = itemIDsRankLookup.get(itemId);
+				}
+
+				// If units and customer prices are negatives (refunds),
+				// subtract
+				// the value setting units positive
+				rank.revenue += Math.abs(sale.units.floatValue()) * sale.customerPrice.floatValue();
+
+				// Take into account price and downloads only from main Apps
+				if (sale.typeIdentifier.equals(FREE_OR_PAID_APP_IPHONE_AND_IPOD_TOUCH_IOS) || sale.typeIdentifier.equals(FREE_OR_PAID_APP_UNIVERSAL_IOS)
+						|| sale.typeIdentifier.equals(FREE_OR_PAID_APP_IPAD_IOS)) {
+					rank.downloads += sale.units.intValue();
 				}
 			}
 
-			if (gotAllRows) {
-				String itemId;
+			FileWriter writer = null;
+			try {
+				writer = new FileWriter(inputFilePath);
 
-				Map<String, Rank> itemIDsRankLookup = new HashMap<String, Rank>();
-				Rank rank;
-				Set<String> missingIdentifiers = new HashSet<String>();
-				for (Sale sale : sales) {
-					// Assign item id of the parent to IAP and Subscriptions
-					if (sale.typeIdentifier.equals(INAPP_PURCHASE_PURCHASE_IOS) || sale.typeIdentifier.equals(INAPP_PURCHASE_SUBSCRIPTION_IOS)) {
-						itemId = parentIdItemIdLookup.get(sale.parentIdentifier);
-					} else {
-						itemId = sale.item.internalId;
-					}
+				writer.append("#item id,revenue,downloads");
 
-					if (itemId == null) {
-						itemId = MISSING_ID_SKU_PREFIX + sale.parentIdentifier;
-						missingIdentifiers.add(sale.parentIdentifier);
-					}
+				for (String key : itemIDsRankLookup.keySet()) {
+					rank = itemIDsRankLookup.get(key);
 
-					if (itemIDsRankLookup.get(itemId) == null) {
-						rank = new Rank();
-						rank.downloads = Integer.valueOf(0);
-						rank.revenue = Float.valueOf(0.0f);
+					writer.append("\n");
 
-						itemIDsRankLookup.put(itemId, rank);
-					} else {
-						rank = itemIDsRankLookup.get(itemId);
-					}
+					writer.append(key);
+					writer.append(",");
 
-					// If units and customer prices are negatives (refunds),
-					// subtract
-					// the value setting units positive
-					rank.revenue += Math.abs(sale.units.floatValue()) * sale.customerPrice.floatValue();
+					writer.append(Double.toString(rank.revenue));
+					writer.append(",");
 
-					// Take into account price and downloads only from main Apps
-					if (sale.typeIdentifier.equals(FREE_OR_PAID_APP_IPHONE_AND_IPOD_TOUCH_IOS) || sale.typeIdentifier.equals(FREE_OR_PAID_APP_UNIVERSAL_IOS)
-							|| sale.typeIdentifier.equals(FREE_OR_PAID_APP_IPAD_IOS)) {
-						rank.downloads += sale.units.intValue();
-					}
+					writer.append(Double.toString(rank.downloads));
 				}
 
-				FileWriter writer = null;
-				try {
-					writer = new FileWriter(inputFilePath);
-
-					writer.append("#item id,revenue,downloads");
-
-					for (String key : itemIDsRankLookup.keySet()) {
-						rank = itemIDsRankLookup.get(key);
-
-						writer.append("\n");
-
-						writer.append(key);
-						writer.append(",");
-
-						writer.append(Double.toString(rank.revenue));
-						writer.append(",");
-
-						writer.append(Double.toString(rank.downloads));
-					}
-
-					DoneHelper.writeDoneFile(inputFilePath);
-				} finally {
-					if (writer != null) {
-						writer.close();
-					}
+				DoneHelper.writeDoneFile(inputFilePath);
+			} finally {
+				if (writer != null) {
+					writer.close();
 				}
 			}
 		}
 
 		return inputFilePath;
+	}
+
+	public static List<Sale> getSales(String source, Date startDate, Date endDate, String country, FormType form, Map<String, String> parentIdItemIdLookup)
+			throws DataAccessException {
+		String query = String
+				.format("SELECT `itemid`,`sku`,`typeidentifier`,`units`,`customerprice`,`parentidentifier` FROM `sale` JOIN `dataaccount` on "
+						+ "`dataaccount`.`id`=`dataaccountid` JOIN `datasource` ON `sourceid`=`datasource`.`id` WHERE `datasource`.`a3code`='%s' AND %s AND `country`='%s'",
+						source, beforeAfterQuery(endDate, startDate, "begin"), country);
+
+		Connection connection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeSale.toString());
+
+		List<Sale> sales = new ArrayList<Sale>();
+
+		try {
+			connection.connect();
+			connection.executeQuery(query);
+
+			Sale sale;
+			while (connection.fetchNextRow()) {
+				sale = new Sale();
+
+				sale.item = new Item();
+				sale.item.internalId = connection.getCurrentRowString("itemid");
+				sale.typeIdentifier = connection.getCurrentRowString("typeidentifier");
+				sale.sku = connection.getCurrentRowString("sku");
+
+				sale.units = connection.getCurrentRowInteger("units");
+				sale.customerPrice = Float.valueOf(connection.getCurrentRowInteger("customerprice").floatValue() / 100.0f);
+				sale.parentIdentifier = stripslashes(connection.getCurrentRowString("parentidentifier"));
+
+				if (FREE_OR_PAID_APP_UNIVERSAL_IOS.equals(sale.typeIdentifier) || UPDATE_UNIVERSAL_IOS.equals(sale.typeIdentifier)
+						|| (FormType.FormTypeOther == form && (FREE_OR_PAID_APP_IPHONE_AND_IPOD_TOUCH_IOS.equals(sale.typeIdentifier)))
+						|| (FormType.FormTypeOther == form && (UPDATE_IPHONE_AND_IPOD_TOUCH_IOS.equals(sale.typeIdentifier)))
+						|| (FormType.FormTypeTablet == form && (FREE_OR_PAID_APP_IPAD_IOS.equals(sale.typeIdentifier)))
+						|| (FormType.FormTypeTablet == form && (UPDATE_IPAD_IOS.equals(sale.typeIdentifier)))
+						|| INAPP_PURCHASE_PURCHASE_IOS.equals(sale.typeIdentifier) || INAPP_PURCHASE_SUBSCRIPTION_IOS.equals(sale.typeIdentifier)) {
+					sales.add(sale);
+				}
+
+				// If type identifier != IA1 or IA9, add parent identifiers into
+				// the Map
+				if (!sale.typeIdentifier.equals(INAPP_PURCHASE_PURCHASE_IOS) && !sale.typeIdentifier.equals(INAPP_PURCHASE_SUBSCRIPTION_IOS)) {
+					parentIdItemIdLookup.put(sale.sku, sale.item.internalId);
+				}
+			}
+		} finally {
+			if (connection != null) {
+				connection.disconnect();
+			}
+		}
+
+		return sales;
 	}
 
 	private static void runRScriptWithParameters(String name, String... parmeters) throws IOException, InterruptedException {
