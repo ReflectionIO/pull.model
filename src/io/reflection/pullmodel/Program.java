@@ -595,12 +595,12 @@ public class Program {
 
 		// Date date =
 		// RankServiceProvider.provide().getCodeLastRankDate(code);
-
+		String freeFilePath = null, paidFilePath = null, outputPath = null;
 		try {
-			String freeFilePath = createInputFile(store, country, category, listType, listTypes, code, "`price`=0", "free");
-			String paidFilePath = createInputFile(store, country, category, listType, listTypes, code, "`price`<>0", "paid");
+			freeFilePath = createInputFile(store, country, category, listType, listTypes, code, "`price`=0", "free");
+			paidFilePath = createInputFile(store, country, category, listType, listTypes, code, "`price`<>0", "paid");
 
-			String outputPath = contextBasedName(ROBUST_OUTPUT_PATH, store.a3Code, country.a2Code, category.id.toString(), listType, code.toString());
+			outputPath = contextBasedName(ROBUST_OUTPUT_PATH, store.a3Code, country.a2Code, category.id.toString(), listType, code.toString());
 
 			// runRScriptWithParameters("model.R", freeFilePath,
 			// paidFilePath, TRUNCATED_OUTPUT_PATH, "400", "40", "500000");
@@ -609,6 +609,12 @@ public class Program {
 			persistCorrelationModelValues(outputPath, store, country, form, code);
 			alterFeedFetchStatus(store, country, category, listTypes, code);
 
+			success = true;
+		} catch (Exception e) {
+			// LOGGER.error("Error running script", e);
+			LOGGER.error(String.format("Error occured calculating values with parameters store [%s], country [%s], type [%s], [%s]", store, country, listType,
+					code == null ? "null" : code.toString()), e);
+		} finally {
 			// deleteFile(TRUNCATED_OUTPUT_PATH);
 			deleteFile(outputPath);
 
@@ -617,12 +623,6 @@ public class Program {
 
 			deleteFile(paidFilePath);
 			deleteFile(DoneHelper.getDoneFileName(paidFilePath));
-
-			success = true;
-		} catch (Exception e) {
-			// LOGGER.error("Error running script", e);
-			LOGGER.error(String.format("Error occured calculating values with parameters store [%s], country [%s], type [%s], [%s]", store, country, listType,
-					code == null ? "null" : code.toString()), e);
 		}
 
 		return success;
@@ -653,12 +653,14 @@ public class Program {
 		// Date date =
 		// RankServiceProvider.provide().getCodeLastRankDate(code);
 
+		String inputFilePath = null, salesInputFilePath = null, outputPath = null;
+
 		try {
-			String inputFilePath = createSimpleInputFile(store, country, category, listType, listTypes, code);
+			inputFilePath = createSimpleInputFile(store, country, category, listType, listTypes, code);
 
-			String salesInputFilePath = createDeveloperDataSummary(store, country, category, form, listType, code);
+			salesInputFilePath = createDeveloperDataSummary(store, country, category, form, listType, code);
 
-			String outputPath = contextBasedName(SIMPLE_OUTPUT_PATH, store.a3Code, country.a2Code, category.id.toString(), form.toString(), code.toString());
+			outputPath = contextBasedName(SIMPLE_OUTPUT_PATH, store.a3Code, country.a2Code, category.id.toString(), form.toString(), code.toString());
 
 			runRScriptWithParameters("simpleModel.R", inputFilePath, salesInputFilePath, Boolean.toString(isDownloadListType(listType)), outputPath);
 
@@ -668,6 +670,13 @@ public class Program {
 
 			alterFeedFetchStatus(feedFetch);
 
+			success = true;
+
+		} catch (Exception e) {
+			// LOGGER.error("Error running script", e);
+			LOGGER.error(String.format("Error occured calculating values with parameters store [%s], country [%s], type [%s], [%s]", store, country, listType,
+					code == null ? "null" : code.toString()), e);
+		} finally {
 			deleteFile(outputPath);
 
 			deleteFile(inputFilePath);
@@ -675,13 +684,6 @@ public class Program {
 
 			deleteFile(salesInputFilePath);
 			deleteFile(DoneHelper.getDoneFileName(salesInputFilePath));
-
-			success = true;
-
-		} catch (Exception e) {
-			// LOGGER.error("Error running script", e);
-			LOGGER.error(String.format("Error occured calculating values with parameters store [%s], country [%s], type [%s], [%s]", store, country, listType,
-					code == null ? "null" : code.toString()), e);
 		}
 
 		return success ? simpleModelRun : null;
@@ -1171,12 +1173,16 @@ public class Program {
 	}
 
 	private static void expireTaskLease(Taskqueue taskQueue, Task task, String taskQueueName) throws IOException {
-		// this is a workaround for an issue with the task queue api
-		task.setQueueName(taskQueueName);
-		task.setRetryCount(Integer.valueOf(task.getRetryCount().intValue() + 1));
-		Taskqueue.Tasks.Update request = taskQueue.tasks().update("s~" + System.getProperty(PROJECT_NAME_KEY), taskQueueName, task.getId(), Integer.valueOf(1),
-				task);
-		request.execute();
+		// // this is a workaround for an issue with the task queue api
+		// task.setQueueName(taskQueueName);
+		// task.setRetryCount(Integer.valueOf(task.getRetryCount().intValue() + 1));
+		// Taskqueue.Tasks.Update request = taskQueue.tasks().update("s~" + System.getProperty(PROJECT_NAME_KEY), taskQueueName, task.getId(),
+		// Integer.valueOf(1),
+		// task);
+		// request.execute();
+
+		// NOTE: we currently avoid issues by deleting items that fail instead of expiring them
+		deleteTask(taskQueue, task, taskQueueName);
 	}
 
 	private static boolean expiredLookup() {
