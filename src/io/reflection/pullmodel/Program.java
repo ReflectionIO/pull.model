@@ -970,10 +970,28 @@ public class Program {
 			// if no sales were found for the data (shift both dates back 1 day and try again)
 			// we can do this more times if required
 			if (sales.size() == 0) {
+				if (LOGGER.isInfoEnabled()) {
+					LOGGER.info("Sales for Store [" + store + "], Country [" + country + "] , Category [" + category + "], FormType [" + form + ", ListType ["
+							+ listType + "], Code [" + code + "], StartDate [" + startDate + "] and EndDate [" + endDate + "]could not be found ");
+				}
+
 				endDate = cal.getTime();
 				cal.add(Calendar.DAY_OF_YEAR, -1);
 				startDate = cal.getTime();
+
+				if (LOGGER.isInfoEnabled()) {
+					LOGGER.info("Attempting to get Sales for StartDate [" + startDate + "] and EndDate [" + endDate + "]could not be found ");
+				}
+
 				sales = getSales(dataSourceA3Code, startDate, endDate, country.a2Code, form, parentIdItemIdLookup);
+
+				if (LOGGER.isInfoEnabled()) {
+					if (sales.size() > 0) {
+						LOGGER.info("Obtained previous sales");
+					} else {
+						LOGGER.info("No previous sales found");
+					}
+				}
 			}
 
 			String itemId;
