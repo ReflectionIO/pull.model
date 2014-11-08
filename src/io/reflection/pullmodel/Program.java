@@ -163,6 +163,8 @@ public class Program {
 
 	private static Session session = null;
 
+	private static SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd");
+
 	public static void main(String[] args) throws Exception {
 
 		SystemConfigurator.get().configure(args.length > LOGGER_CONFIG_ARG_INDEX ? args[LOGGER_CONFIG_ARG_INDEX] : null);
@@ -763,7 +765,7 @@ public class Program {
 					writer.append(itemId = rankConnection.getCurrentRowString("itemid"));
 					writer.append("\",");
 
-					writer.append((new SimpleDateFormat("yyyy-MM-dd")).format(rankConnection.getCurrentRowDateTime("date")));
+					writer.append(DATE_FORMAT.format(rankConnection.getCurrentRowDateTime("date")));
 					writer.append(",");
 
 					Integer topPosition = rankConnection.getCurrentRowInteger("position");
@@ -972,7 +974,8 @@ public class Program {
 			if (sales.size() == 0) {
 				if (LOGGER.isInfoEnabled()) {
 					LOGGER.info("Sales for Store [" + store + "], Country [" + country + "] , Category [" + category + "], FormType [" + form + ", ListType ["
-							+ listType + "], Code [" + code + "], StartDate [" + startDate + "] and EndDate [" + endDate + "]could not be found ");
+							+ listType + "], Code [" + code + "], StartDate [" + DATE_FORMAT.format(startDate) + "] and EndDate ["
+							+ DATE_FORMAT.format(endDate) + "] could not be found.");
 				}
 
 				endDate = cal.getTime();
@@ -980,7 +983,8 @@ public class Program {
 				startDate = cal.getTime();
 
 				if (LOGGER.isInfoEnabled()) {
-					LOGGER.info("Attempting to get Sales for StartDate [" + startDate + "] and EndDate [" + endDate + "]could not be found ");
+					LOGGER.info("Attempting to get Sales for StartDate [" + DATE_FORMAT.format(startDate) + "] and EndDate [" + DATE_FORMAT.format(endDate)
+							+ "].");
 				}
 
 				sales = getSales(dataSourceA3Code, startDate, endDate, country.a2Code, form, parentIdItemIdLookup);
