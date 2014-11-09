@@ -969,6 +969,11 @@ public class Program {
 			endDate = cal.getTime();
 			cal.add(Calendar.DAY_OF_YEAR, -1);
 			startDate = cal.getTime();
+
+			if (LOGGER.isInfoEnabled()) {
+				LOGGER.info("Attempting to get Sales for StartDate [" + DATE_FORMAT.format(startDate) + "] and EndDate [" + DATE_FORMAT.format(endDate) + "].");
+			}
+
 			sales = getSales(dataSourceA3Code, startDate, endDate, country.a2Code, form, parentIdItemIdLookup);
 
 			// if no sales were found for the data (shift both dates back 1 day and try again)
@@ -997,6 +1002,10 @@ public class Program {
 					} else {
 						LOGGER.info("No previous sales found");
 					}
+				}
+			} else {
+				if (LOGGER.isInfoEnabled()) {
+					LOGGER.info("Obtained yesterdays sales");
 				}
 			}
 
