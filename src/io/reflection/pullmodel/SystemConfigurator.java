@@ -72,6 +72,9 @@ public class SystemConfigurator {
 	public static final String TASK_RETRY_COUNT_KEY = "task.retry.count";
 	public static final String TASK_RETRY_COUNT_DEFAULT = "1";
 
+	public static final String CONNECTION_EXECUTEQUERY_RETRY_COUNT_KEY = "connection.executequery.retry.count";
+	public static final String CONNECTION_EXECUTEQUERY_RETRY_COUNT_DEFAULT = "3";
+
 	/**
 	 * @return
 	 */
@@ -178,6 +181,10 @@ public class SystemConfigurator {
 
 		if (defaultConfig || (propertyValue = System.getProperty(TASK_RETRY_COUNT_KEY)) == null || propertyValue.isEmpty()) {
 			System.setProperty(TASK_RETRY_COUNT_KEY, TASK_RETRY_COUNT_DEFAULT);
+		}
+
+		if (defaultConfig || (propertyValue = System.getProperty(CONNECTION_EXECUTEQUERY_RETRY_COUNT_KEY)) == null || propertyValue.isEmpty()) {
+			System.setProperty(CONNECTION_EXECUTEQUERY_RETRY_COUNT_KEY, CONNECTION_EXECUTEQUERY_RETRY_COUNT_DEFAULT);
 		}
 
 	}
