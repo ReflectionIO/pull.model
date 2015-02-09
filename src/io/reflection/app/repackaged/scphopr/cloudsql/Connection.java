@@ -9,6 +9,7 @@ package io.reflection.app.repackaged.scphopr.cloudsql;
 
 import io.reflection.app.api.exception.DataAccessException;
 import io.reflection.app.logging.GaeLevel;
+import io.reflection.pullmodel.SystemConfigurator;
 
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -17,6 +18,8 @@ import java.sql.Statement;
 import java.sql.Timestamp;
 import java.util.Date;
 import java.util.logging.Logger;
+
+import com.mysql.jdbc.CommunicationsException;
 
 public final class Connection {
 
@@ -53,17 +56,13 @@ public final class Connection {
 					+ " and password: ********");
 		}
 
-		if (server == null)
-			throw new NullPointerException("server name cannot be null");
+		if (server == null) throw new NullPointerException("server name cannot be null");
 
-		if (database == null)
-			throw new NullPointerException("database name cannot be null");
+		if (database == null) throw new NullPointerException("database name cannot be null");
 
-		if (username == null)
-			throw new NullPointerException("username cannot be null");
+		if (username == null) throw new NullPointerException("username cannot be null");
 
-		if (password == null)
-			throw new NullPointerException("password cannot be null");
+		if (password == null) throw new NullPointerException("password cannot be null");
 
 		this.isTransactionMode = transactionMode;
 
@@ -138,33 +137,43 @@ public final class Connection {
 			LOG.log(GaeLevel.DEBUG, "executing query: " + query);
 		}
 
-		if (query == null)
-			throw new NullPointerException("query cannot be null");
-		if (query.length() == 0)
-			throw new IllegalArgumentException("query cannot be empty");
+		if (query == null) throw new NullPointerException("query cannot be null");
+		if (query.length() == 0) throw new IllegalArgumentException("query cannot be empty");
 
 		affectedRowCount = -1;
 		statement = null;
 		insertedId = -1;
 
-		connect();
+		boolean retry;
+		int remaining = Integer.valueOf(System.getProperty(SystemConfigurator.CONNECTION_EXECUTEQUERY_RETRY_COUNT_KEY));
+		do {
+			retry = false;
+			connect();
 
-		try {
-			if (statement == null) {
-				statement = connection.createStatement();
+			try {
+				if (statement == null) {
+					statement = connection.createStatement();
+				}
+
+				try {
+					if (statement.execute(query, Statement.RETURN_GENERATED_KEYS)) {
+						queryResult = statement.getResultSet();
+					} else {
+						queryResult = statement.getGeneratedKeys();
+					}
+				} catch (CommunicationsException comsEx) {
+					if (remaining > 0) {
+						connection = null;
+						retry = true;
+						remaining--;
+					} else throw comsEx;
+				}
+			} catch (SQLException ex) {
+				LOG.log(GaeLevel.SEVERE, "Error executing query", ex);
+
+				throw new DataAccessException(ex);
 			}
-
-			if (statement.execute(query, Statement.RETURN_GENERATED_KEYS)) {
-				queryResult = statement.getResultSet();
-			} else {
-				queryResult = statement.getGeneratedKeys();
-			}
-
-		} catch (SQLException ex) {
-			LOG.log(GaeLevel.SEVERE, "Error executing query", ex);
-
-			throw new DataAccessException(ex);
-		}
+		} while (retry);
 
 		return;
 	}
@@ -195,8 +204,7 @@ public final class Connection {
 		boolean fetched = false;
 		if (queryResult != null) {
 			try {
-				if (fetched = queryResult.next()) {
-				}
+				if (fetched = queryResult.next()) {}
 			} catch (SQLException ex) {
 				LOG.log(GaeLevel.SEVERE, "Error fetching next row", ex);
 
