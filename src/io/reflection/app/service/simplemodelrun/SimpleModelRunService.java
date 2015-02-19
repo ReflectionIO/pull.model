@@ -9,6 +9,7 @@
 package io.reflection.app.service.simplemodelrun;
 
 import io.reflection.app.api.exception.DataAccessException;
+import io.reflection.app.api.shared.datatypes.Pager;
 import io.reflection.app.datatypes.shared.FeedFetch;
 import io.reflection.app.datatypes.shared.SimpleModelRun;
 import io.reflection.app.repackaged.scphopr.cloudsql.Connection;
@@ -16,6 +17,10 @@ import io.reflection.app.repackaged.scphopr.service.database.DatabaseServiceProv
 import io.reflection.app.repackaged.scphopr.service.database.DatabaseType;
 import io.reflection.app.repackaged.scphopr.service.database.IDatabaseService;
 import io.reflection.app.service.ServiceType;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 
 final class SimpleModelRunService implements ISimpleModelRunService {
 	public String getName() {
@@ -64,6 +69,7 @@ final class SimpleModelRunService implements ISimpleModelRunService {
 
 		simpleModelRun.a = connection.getCurrentRowDouble("a");
 		simpleModelRun.b = connection.getCurrentRowDouble("b");
+		simpleModelRun.summaryDate = connection.getCurrentRowDateTime("summarydate");
 
 		return simpleModelRun;
 	}
@@ -72,8 +78,9 @@ final class SimpleModelRunService implements ISimpleModelRunService {
 	public SimpleModelRun addSimpleModelRun(SimpleModelRun simpleModelRun) throws DataAccessException {
 		SimpleModelRun addedSimpleModelRun = null;
 
-		final String addSimpleModelRunQuery = String.format("INSERT INTO `simplemodelrun` (`feedfetchid`,`a`,`b`) VALUES (%d,%f,%f);",
-				simpleModelRun.feedFetch.id.longValue(), simpleModelRun.a.doubleValue(), simpleModelRun.b.doubleValue());
+		final String addSimpleModelRunQuery = String.format("INSERT INTO `simplemodelrun` (`feedfetchid`,`a`,`b`,`summarydate`) VALUES (%d,%f,%f,%s);",
+				simpleModelRun.feedFetch.id.longValue(), simpleModelRun.a.doubleValue(), simpleModelRun.b.doubleValue(),
+				simpleModelRun.summaryDate == null ? "NULL" : Long.toString(simpleModelRun.summaryDate.getTime() / 1000L));
 
 		Connection simpleModelRunConnection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeSimpleModelRun.toString());
 
@@ -102,8 +109,10 @@ final class SimpleModelRunService implements ISimpleModelRunService {
 	public SimpleModelRun updateSimpleModelRun(SimpleModelRun simpleModelRun) throws DataAccessException {
 		SimpleModelRun updatedSimpleModelRun = null;
 
-		final String updateSimpleModelRunQuery = String.format("UPDATE `simplemodelrun` SET `feedfetchid`=%d,`a`=%f,`b`=%f WHERE `id`=%d AND `deleted`='n';",
-				simpleModelRun.feedFetch.id, simpleModelRun.a.doubleValue(), simpleModelRun.b.doubleValue(), simpleModelRun.id.longValue());
+		final String updateSimpleModelRunQuery = String.format(
+				"UPDATE `simplemodelrun` SET `feedfetchid`=%d,`a`=%f,`b`=%f,`summarydate`=%s WHERE `id`=%d AND `deleted`='n';", simpleModelRun.feedFetch.id,
+				simpleModelRun.a.doubleValue(), simpleModelRun.b.doubleValue(),
+				simpleModelRun.summaryDate == null ? "NULL" : Long.toString(simpleModelRun.summaryDate.getTime() / 1000L), simpleModelRun.id.longValue());
 
 		Connection simpleSimpleModelRunConnection = DatabaseServiceProvider.provide().getNamedConnection(DatabaseType.DatabaseTypeSimpleModelRun.toString());
 
@@ -159,4 +168,113 @@ final class SimpleModelRunService implements ISimpleModelRunService {
 		}
 		return simpleModelRun;
 	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see io.reflection.app.service.simplemodelrun.ISimpleModelRunService#getFeedFetchesSimpleModelRuns(java.util.Collection,
+	 * io.reflection.app.api.shared.datatypes.Pager)
+	 */
+	@Override
+	public List<SimpleModelRun> getFeedFetchesSimpleModelRuns(Collection<Long> feedFetchIds, Pager pager) throws DataAccessException {
+		List<SimpleModelRun> simpleModelRunList = new ArrayList<SimpleModelRun>();
+
+		StringBuffer joinedIds = new StringBuffer();
+		for (Long id : feedFetchIds) {
+			if (joinedIds.length() != 0) {
+				joinedIds.append(",");
+			}
+			joinedIds.append(id.toString());
+		}
+
+		IDatabaseService databaseService = DatabaseServiceProvider.provide();
+		Connection simpleModelRunConnection = databaseService.getNamedConnection(DatabaseType.DatabaseTypeSimpleModelRun.toString());
+
+		String getFeedFetchSimpleModelRunQuery = String.format("SELECT * FROM `simplemodelrun` WHERE `feedfetchid` IN (%s) AND `deleted`='n'", joinedIds);
+
+		if (pager != null) {
+			String sortByQuery = "id";
+
+			if (pager.sortBy != null && ("created".equals(pager.sortBy) || "feedfetchid".equals(pager.sortBy))) {
+				sortByQuery = pager.sortBy;
+			}
+
+			String sortDirectionQuery = "DESC";
+
+			if (pager.sortDirection != null) {
+				switch (pager.sortDirection) {
+				case SortDirectionTypeAscending:
+					sortDirectionQuery = "ASC";
+					break;
+				default:
+					break;
+				}
+			}
+
+			getFeedFetchSimpleModelRunQuery += String.format(" ORDER BY `%s` %s", sortByQuery, sortDirectionQuery);
+		}
+
+		if (pager.start != null && pager.count != null) {
+			getFeedFetchSimpleModelRunQuery += String.format(" LIMIT %d, %d", pager.start.longValue(), pager.count.longValue());
+		} else if (pager.count != null) {
+			getFeedFetchSimpleModelRunQuery += String.format(" LIMIT %d", pager.count);
+		}
+
+		try {
+			simpleModelRunConnection.connect();
+			simpleModelRunConnection.executeQuery(getFeedFetchSimpleModelRunQuery);
+
+			while (simpleModelRunConnection.fetchNextRow()) {
+				SimpleModelRun simpleModelRun = toSimpleModelRun(simpleModelRunConnection);
+				if (simpleModelRun != null) {
+					simpleModelRunList.add(simpleModelRun);
+				}
+			}
+
+		} finally {
+			if (simpleModelRunConnection != null) {
+				simpleModelRunConnection.disconnect();
+			}
+		}
+		return simpleModelRunList;
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see io.reflection.app.service.simplemodelrun.ISimpleModelRunService#getFeedFetchesSimpleModelRunsCount(java.util.Collection)
+	 */
+	@Override
+	public Long getFeedFetchesSimpleModelRunsCount(Collection<Long> feedFetchIds) throws DataAccessException {
+		Long SimpleModelRunCount = new Long(0);
+
+		StringBuffer joinedIds = new StringBuffer();
+		for (Long id : feedFetchIds) {
+			if (joinedIds.length() != 0) {
+				joinedIds.append(",");
+			}
+			joinedIds.append(id.toString());
+		}
+
+		IDatabaseService databaseService = DatabaseServiceProvider.provide();
+		Connection simpleModelRunConnection = databaseService.getNamedConnection(DatabaseType.DatabaseTypeSimpleModelRun.toString());
+
+		String getFeedFetchSimpleModelRunQuery = String.format(
+				"SELECT count(1) as `count` FROM `simplemodelrun` WHERE `feedfetchid` IN (%s) AND `deleted`='n'", joinedIds);
+		try {
+			simpleModelRunConnection.connect();
+			simpleModelRunConnection.executeQuery(getFeedFetchSimpleModelRunQuery);
+
+			if (simpleModelRunConnection.fetchNextRow()) {
+				SimpleModelRunCount = simpleModelRunConnection.getCurrentRowLong("count");
+			}
+
+		} finally {
+			if (simpleModelRunConnection != null) {
+				simpleModelRunConnection.disconnect();
+			}
+		}
+		return SimpleModelRunCount;
+	}
+
 }

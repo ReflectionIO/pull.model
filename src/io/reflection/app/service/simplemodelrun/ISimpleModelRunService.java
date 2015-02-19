@@ -8,14 +8,17 @@
 //
 package io.reflection.app.service.simplemodelrun;
 
+import java.util.Collection;
+import java.util.List;
+
 import io.reflection.app.api.exception.DataAccessException;
+import io.reflection.app.api.shared.datatypes.Pager;
 import io.reflection.app.datatypes.shared.FeedFetch;
 import io.reflection.app.datatypes.shared.SimpleModelRun;
 
 import com.spacehopperstudios.service.IService;
 
 public interface ISimpleModelRunService extends IService {
-
 	/**
 	 * Get simple model run
 	 * 
@@ -59,5 +62,23 @@ public interface ISimpleModelRunService extends IService {
 	 * @throws DataAccessException
 	 */
 	public SimpleModelRun getFeedFetchSimpleModelRun(FeedFetch feedFetch) throws DataAccessException;
+
+	/**
+	 * Get Simple Model Runs based on feed fetches
+	 * 
+	 * @param feedFetches
+	 * @param pager
+	 * @return
+	 * @throws DataAccessException
+	 */
+	public List<SimpleModelRun> getFeedFetchesSimpleModelRuns(Collection<Long> feedFetcheIds, Pager pager) throws DataAccessException;
+
+	/**
+	 * 
+	 * @param feedFetcheIds
+	 * @return
+	 * @throws DataAccessException
+	 */
+	public Long getFeedFetchesSimpleModelRunsCount(Collection<Long> feedFetchIds) throws DataAccessException;
 
 }
