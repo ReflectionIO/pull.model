@@ -8,6 +8,8 @@
 //
 package io.reflection.app.datatypes.shared;
 
+import java.util.Date;
+
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
@@ -17,6 +19,7 @@ public class SimpleModelRun extends DataType {
 	public FeedFetch feedFetch;
 	public Double a;
 	public Double b;
+	public Date summaryDate;
 
 	@Override
 	public JsonObject toJson() {
@@ -27,6 +30,8 @@ public class SimpleModelRun extends DataType {
 		object.add("a", jsonA);
 		JsonElement jsonB = b == null ? JsonNull.INSTANCE : new JsonPrimitive(b);
 		object.add("b", jsonB);
+		JsonElement jsonSummaryDate = summaryDate == null ? JsonNull.INSTANCE : new JsonPrimitive(summaryDate.getTime());
+		object.add("summaryDate", jsonSummaryDate);
 		return object;
 	}
 
@@ -52,5 +57,31 @@ public class SimpleModelRun extends DataType {
 				b = Double.valueOf(jsonB.getAsDouble());
 			}
 		}
+		if (jsonObject.has("summaryDate")) {
+			JsonElement jsonSummaryDate = jsonObject.get("summaryDate");
+			if (jsonSummaryDate != null) {
+				summaryDate = new Date(jsonSummaryDate.getAsLong());
+			}
+		}
+	}
+
+	public SimpleModelRun feedFetch(FeedFetch feedFetch) {
+		this.feedFetch = feedFetch;
+		return this;
+	}
+
+	public SimpleModelRun a(Double a) {
+		this.a = a;
+		return this;
+	}
+
+	public SimpleModelRun b(Double b) {
+		this.b = b;
+		return this;
+	}
+
+	public SimpleModelRun summaryDate(Date summaryDate) {
+		this.summaryDate = summaryDate;
+		return this;
 	}
 }

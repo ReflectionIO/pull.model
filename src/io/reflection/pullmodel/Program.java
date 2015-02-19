@@ -165,6 +165,9 @@ public class Program {
 
 	private static SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd");
 
+	// date of the sales obtained to model against a code
+	private static Date summaryDate = null;
+
 	public static void main(String[] args) throws Exception {
 
 		SystemConfigurator.get().configure(args.length > LOGGER_CONFIG_ARG_INDEX ? args[LOGGER_CONFIG_ARG_INDEX] : null);
@@ -666,7 +669,8 @@ public class Program {
 
 			FeedFetch feedFetch = FeedFetchServiceProvider.provide().getListTypeCodeFeedFetch(country, store, category, listType, code);
 
-			simpleModelRun = persistSimpleModelValues(outputPath, feedFetch);
+			// the summary date should be populated when the data summary is created
+			simpleModelRun = persistSimpleModelValues(outputPath, feedFetch, summaryDate);
 
 			alterFeedFetchStatus(feedFetch);
 
@@ -918,6 +922,10 @@ public class Program {
 
 	private static String createDeveloperDataSummary(Store store, Country country, Category category, FormType form, String listType, Long code)
 			throws IOException, DataAccessException {
+		
+		// clear the summary date
+		summaryDate = null;
+		
 		String inputFilePath = contextBasedName("sale", store.a3Code, country.a2Code, form.toString(),
 				category == null || category.id == null ? Long.toString(24) : category.id.toString(), code.toString())
 				+ ".csv";
@@ -1021,6 +1029,11 @@ public class Program {
 					itemId = sale.item.internalId;
 				}
 
+				// Use the first sale date as the date of the summary
+				if (summaryDate == null) {
+					summaryDate = (sale.begin == null ? sale.end : sale.begin);
+				}
+				
 				if (itemId == null) {
 					itemId = MISSING_ID_SKU_PREFIX + sale.parentIdentifier;
 					missingIdentifiers.add(sale.parentIdentifier);
@@ -1344,10 +1357,11 @@ public class Program {
 	 * 
 	 * @param resultsFileName
 	 * @param feedFetch
+	 * @param summaryDate
 	 * @throws DataAccessException
 	 * @throws IOException
 	 */
-	private static SimpleModelRun persistSimpleModelValues(String resultsFileName, FeedFetch feedFetch) throws DataAccessException, IOException {
+	private static SimpleModelRun persistSimpleModelValues(String resultsFileName, FeedFetch feedFetch, Date summaryDate) throws DataAccessException, IOException {
 		Map<String, String> results = parseOutputFile(resultsFileName);
 
 		SimpleModelRun run = SimpleModelRunServiceProvider.provide().getFeedFetchSimpleModelRun(feedFetch);
@@ -1366,6 +1380,7 @@ public class Program {
 
 		run.a = Double.valueOf(results.get(A_OUTPUT));
 		run.b = Double.valueOf(results.get(B_OUTPUT));
+		run.summaryDate = summaryDate;
 
 		if (isUpdate) {
 			run = SimpleModelRunServiceProvider.provide().updateSimpleModelRun(run);
